@@ -89,14 +89,24 @@ def executer():
                 page.fill("#password", PASSWORD)
                 page.keyboard.press("Enter")
                 
-                # On attend que la page post-connexion charge
-                page.wait_for_load_state("networkidle")
+                # ATTENDRE QUE LA PAGE CHARGE COMPLÈTEMENT
+                # "networkidle" attend qu'il n'y ait plus de trafic réseau pendant 500ms
+                page.wait_for_load_state("networkidle", timeout=60000)
 
             # --- ACCÈS AUX NOTES ---
             print("Recherche du bouton des notes...")
-            # Utilisation d'un sélecteur plus robuste (contient 'semestre' et est un bouton)
-            # On attend qu'il soit attaché au DOM avant de cliquer
-            selector_bouton = "input[type='submit'][value*='semestre']"
+            # On utilise un sélecteur qui cherche n'importe quel input contenant "semestre"
+            selector_bouton = "input[value*='semestre']"
+
+            try:
+                # Attendre que l'élément soit réellement présent et cliquable
+                page.wait_for_selector(selector_bouton, state="visible", timeout=45000)
+                print("Bouton trouvé, clic...")
+                page.locator(selector_bouton).first.click(force=True)
+            except Exception as e:
+                print(f"Le bouton n'a pas été trouvé. URL actuelle : {page.url}")
+                page.screenshot(path="debug_bouton.png", full_page=True)
+                raise e
             
             page.wait_for_selector(selector_bouton, state="visible", timeout=30000)
             print("Bouton trouvé, clic en cours...")
