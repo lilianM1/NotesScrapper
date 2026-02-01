@@ -1,33 +1,31 @@
-name: Surveillance Notes INSA
+name: INSA Notes Bot
 
 on:
   schedule:
-    - cron: "*/15 * * * *" # Attention : 5 min c'est très fréquent, l'INSA peut bloquer ton IP. 15min est plus sûr.
+    - cron: "*/30 * * * *"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Setup Python avec cache
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip" # Active le cache pip automatiquement
 
-      - name: Install dependencies
+      - name: Installer dépendances
         run: |
-          pip install --upgrade pip
           pip install playwright requests
-          # Installation de Chromium ET des dépendances système Linux
           playwright install --with-deps chromium
 
-      - name: Run INSA Bot
+      - name: Lancer le bot
         env:
           INSA_USER: ${{ secrets.INSA_USER }}
           INSA_PWD: ${{ secrets.INSA_PWD }}
@@ -35,25 +33,19 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python insa_bot.py
 
-      - name: Save notes cache
+      - name: Commit cache notes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-          # On n'ajoute que si le fichier existe pour éviter l'erreur fatal: pathspec
           if [ -f notes.json ]; then
             git add notes.json
-            # On commit seulement s'il y a un changement réel
             git diff --quiet && git diff --staged --quiet || (git commit -m "MAJ cache notes [skip ci]" && git push)
-          else
-            echo "Fichier notes.json introuvable, le script a dû échouer."
           fi
 
-      - name: Upload debug screenshots
-        if: always()
+      - name: Upload screenshots debug
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: debug-screenshots
-          path: |
-            *.png
+          path: "*.png"
           retention-days: 3
