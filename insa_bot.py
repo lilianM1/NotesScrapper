@@ -79,26 +79,23 @@ def executer():
             page.goto("https://extranet.insa-strasbourg.fr/", wait_until="domcontentloaded", timeout=60000)
 
             # --- LOGIN CAS ---
-            # Vérifier si on est sur la page de login CAS (pas juste "cas" dans l'URL)
-            if "cas.insa-strasbourg.fr" in page.url or page.locator("#username").is_visible():
-                print("Authentification CAS...")
-                page.wait_for_selector("#username", state="visible", timeout=15000)
-                page.fill("#username", USERNAME)
-                page.fill("#password", PASSWORD)
-                page.click("button[type='submit'], input[type='submit']")
+            # Vérifier si on est sur la page de login CAS (présence du champ username)
+            try:
+                if page.locator("#username").is_visible(timeout=3000):
+                    print("Authentification CAS...")
+                    page.fill("#username", USERNAME)
+                    page.fill("#password", PASSWORD)
+                    page.click("button[type='submit'], input[type='submit']")
+            except:
+                print("Pas de page CAS détectée, déjà connecté ?")
             
-            # Attendre la redirection complète vers l'extranet
-            print("Attente de la redirection...")
-            page.wait_for_url("**/extranet.insa-strasbourg.fr/**", timeout=30000)
+            # Attendre que la page soit complètement chargée
+            print("Attente du chargement de l'extranet...")
             page.wait_for_load_state("networkidle", timeout=30000)
             
-            print(f"Après login, URL: {page.url}")
+            print(f"Page chargée, URL: {page.url}")
             page.screenshot(path="debug_after_login.png", full_page=True)
 
-            # Vérifier qu'on est bien connecté (chercher un élément de l'extranet)
-            # Attendre que la page de l'extranet soit chargée
-            page.wait_for_selector("body", timeout=10000)
-            
             # --- ACCÈS AUX NOTES ---
             print("Recherche du bouton des notes...")
             
@@ -106,13 +103,13 @@ def executer():
             selectors = [
                 "input[value*='semestre']",
                 "input[value*='Semestre']",
+                "input[value*='Notes']",
+                "input[value*='notes']",
+                "a:has-text('Notes du semestre')",
                 "a:has-text('notes')",
                 "a:has-text('Notes')",
-                "a:has-text('Notes du semestre')",
-                "input[value*='notes']",
                 "button:has-text('notes')",
                 "a[href*='note']",
-                "input[type='submit']"
             ]
             
             bouton_trouve = False
@@ -120,32 +117,37 @@ def executer():
                 try:
                     locator = page.locator(selector).first
                     if locator.is_visible(timeout=2000):
-                        print(f"Bouton trouvé avec: {selector}")
-                        locator.click(force=True)
+                        texte = locator.inner_text() if locator.evaluate("el => el.tagName") != "INPUT" else locator.get_attribute("value")
+                        print(f"Bouton trouvé avec: {selector} -> '{texte}'")
+                        locator.click()
                         bouton_trouve = True
                         break
                 except:
                     continue
             
             if not bouton_trouve:
-                # Lister tous les liens et boutons visibles pour debug
+                # Debug: afficher les éléments disponibles
                 print("❌ Aucun bouton de notes trouvé!")
                 print(f"URL actuelle: {page.url}")
                 
-                # Debug: afficher les liens disponibles
+                # Lister les liens
                 links = page.locator("a").all()
-                print(f"Liens trouvés ({len(links)}):")
-                for link in links[:10]:
+                print(f"\nLiens trouvés ({len(links)}):")
+                for i, link in enumerate(links[:15]):
                     try:
-                        print(f"  - {link.inner_text()[:50]} -> {link.get_attribute('href')}")
+                        txt = link.inner_text().strip().replace('\n', ' ')[:60]
+                        href = link.get_attribute('href') or ''
+                        print(f"  {i+1}. '{txt}' -> {href[:50]}")
                     except:
                         pass
                 
-                inputs = page.locator("input[type='submit']").all()
-                print(f"Boutons submit trouvés ({len(inputs)}):")
-                for inp in inputs[:10]:
+                # Lister les boutons input
+                inputs = page.locator("input[type='submit'], input[type='button']").all()
+                print(f"\nBoutons trouvés ({len(inputs)}):")
+                for i, inp in enumerate(inputs[:10]):
                     try:
-                        print(f"  - {inp.get_attribute('value')}")
+                        val = inp.get_attribute('value') or inp.get_attribute('name') or '???'
+                        print(f"  {i+1}. '{val}'")
                     except:
                         pass
                 
@@ -153,7 +155,8 @@ def executer():
                 envoyer_telegram("❌ *Erreur* : Bouton des notes introuvable sur l'extranet")
                 return
 
-            # Attendre que le tableau des notes apparaisse
+            # Attendre que la page des notes charge
+            print("Chargement de la page des notes...")
             page.wait_for_load_state("networkidle", timeout=30000)
             page.wait_for_selector("table", timeout=30000)
 
@@ -164,6 +167,8 @@ def executer():
             notes_actuelles = {}
 
             tables = page.locator("table").all()
+            print(f"Nombre de tableaux trouvés: {len(tables)}")
+            
             for table in tables:
                 rows = table.locator("tr").all()
                 for row in rows:
@@ -171,10 +176,11 @@ def executer():
                     if len(cells) >= 3:
                         matiere = " ".join(cells[1].inner_text().split())
                         note = cells[2].inner_text().strip()
-                        if matiere:
+                        if matiere and matiere != "Matière":
                             notes_actuelles[matiere] = note
 
             if notes_actuelles:
+                print(f"Notes extraites: {len(notes_actuelles)}")
                 comparer_et_notifier(notes_actuelles)
             else:
                 print("Aucune note trouvée dans les tableaux.")
