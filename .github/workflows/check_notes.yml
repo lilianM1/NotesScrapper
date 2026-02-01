@@ -1,7 +1,8 @@
-name: Surveillance Notes
+name: Surveillance Notes INSA
+
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/5 * * * *" # toutes les 5 minutes
   workflow_dispatch:
 
 jobs:
@@ -9,19 +10,23 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
-        with: { python-version: "3.9" }
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
+          pip install --upgrade pip
           pip install playwright requests
-          playwright install chromium
+          playwright install --with-deps chromium
 
-      - name: Run Bot
+      - name: Run INSA Bot
         env:
           INSA_USER: ${{ secrets.INSA_USER }}
           INSA_PWD: ${{ secrets.INSA_PWD }}
@@ -29,17 +34,17 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python insa_bot.py
 
-      - name: Save Cache
+      - name: Save notes cache
         run: |
           git config --global user.name "InsaBot"
           git config --global user.email "bot@insa.fr"
-          # On s'assure que le fichier existe avant l'ajout
+
           touch notes.json
           git add notes.json
-          # Commit et Push seulement s'il y a une modification
+
           if ! git diff --cached --quiet; then
-            git commit -m "MAJ Cache Notes [skip ci]"
+            git commit -m "MAJ cache notes [skip ci]"
             git push
           else
-            echo "Aucun changement à sauvegarder."
+            echo "Aucune modification du cache."
           fi
