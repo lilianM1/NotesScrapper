@@ -36,55 +36,35 @@ def save_notes(notes):
     with open(NOTES_FILE, "w", encoding="utf-8") as f:
         json.dump(notes, f, ensure_ascii=False, indent=2)
 
-def format_notes():
-    """Formate les notes pour Telegram"""
     notes = load_notes()
     if not notes:
         return "❌ Aucune note enregistrée."
-    
+
     dispo = [(m, n) for m, n in notes.items() if n and n.strip() and n != "-"]
     attente = [(m, n) for m, n in notes.items() if not n or not n.strip() or n == "-"]
-    
+
     msg = "📊 *VOS NOTES*\n"
     msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-    
-    if dispo:
-        for mat, note in dispo:
-            # Extraire le nom court et le coefficient
-            parts = mat.split(" - ")
-            if len(parts) >= 2:
-                # Prendre la partie avant " - (coef)"
-                nom_complet = parts[0]
-                # Extraire juste le nom de la matière (après les codes)
-                segments = nom_complet.split("-")
-                if len(segments) > 1:
-                    nom = segments[-1].strip()  # Dernier segment = nom matière
-                else:
-                    nom = nom_complet
-                # Coefficient
-                coef = parts[-1].replace("(", "").replace(")", "").strip()
-            else:
-                nom = mat
-                coef = "?"
-            
-            # Nettoyer et limiter la longueur
-            nom = nom.strip()
-            if len(nom) > 28:
-                nom = nom[:25] + "..."
-            
-            msg += f"📚 *{nom}*\n"
-            msg += f"      Note: *{note}* │ Coef: {coef}\n\n"
-    
-    if attente:
-        msg += "━━━━━━━━━━━━━━━━━━━━\n"
-        msg += f"⏳ *En attente:* {len(attente)} matières\n"
-    
-    # Stats
-    msg += "━━━━━━━━━━━━━━━━━━━━\n"
-    msg += f"📈 *{len(dispo)}/{len(notes)}* notes disponibles"
-    
-    return msg
 
+    if dispo:
+        import re
+        for matiere, note in dispo:
+            # Extraction du coef si présent dans le nom
+            coef_match = re.search(r"\((\d+(?:,\d+)?)\)", matiere)
+            coef = coef_match.group(1) if coef_match else "?"
+            # Nom complet sans coupure
+            nom = re.sub(r"\s*\(\d+(?:,\d+)?\)", "", matiere)
+            # Si c'est un stage, garder le nom complet
+            if "Stage" in matiere or "stage" in matiere:
+                nom = matiere
+            msg += f"📚 {nom}\n      Note: {note} │ Coef: {coef}\n\n"
+
+    msg += "━━━━━━━━━━━━━━━━━━━━\n"
+    msg += f"⏳ En attente: {len(attente)} matières\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n"
+    msg += f"📈 {len(dispo)}/{len(notes)} notes disponibles"
+    return msg
+            
 def format_stats():
     """Statistiques"""
     notes = load_notes()
