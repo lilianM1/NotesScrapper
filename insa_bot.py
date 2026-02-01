@@ -137,6 +137,7 @@ def executer():
         except PlaywrightTimeoutError:
             page.screenshot(path="timeout_error.png", full_page=True)
             envoyer_telegram("❌ *Erreur INSA* : délai dépassé (timeout).")
+            page.screenshot(path="timeout_error.png", full_page=True)
             print("Timeout Playwright.")
 
         except Exception as e:
