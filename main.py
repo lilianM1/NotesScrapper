@@ -11,34 +11,35 @@ def format_ue():
     if not notes:
         return "❌ Aucune donnée."
 
-    # Récupère tous les codes UE présents dans les matières
+    # Regroupe par préfixe de code matière (avant le deuxième tiret)
     import re
-    ue_codes = set()
-    ue_notes = {}
+    ue_dict = {}
     for matiere, note in notes.items():
-        ue_match = re.match(r"(UE-[A-Z0-9-]+)", matiere)
-        if ue_match:
-            ue = ue_match.group(1)
-            ue_codes.add(ue)
-            try:
-                v = float(note.replace(",", "."))
-            except:
-                v = None
-            if ue not in ue_notes:
-                ue_notes[ue] = []
-            if v is not None:
-                ue_notes[ue].append(v)
+        # Extrait le préfixe UE (ex: STM-GE-01)
+        match = re.match(r"([A-Z]+-[A-Z]+-\d+)", matiere)
+        if match:
+            ue = match.group(1)
+        else:
+            ue = "Autres"
+        try:
+            v = float(note.replace(",", "."))
+        except:
+            v = None
+        if ue not in ue_dict:
+            ue_dict[ue] = []
+        if v is not None:
+            ue_dict[ue].append(v)
 
     msg = "📚 *Liste des UE*\n"
     msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-    for ue in sorted(ue_codes):
-        if ue in ue_notes and ue_notes[ue]:
-            moyenne = sum(ue_notes[ue]) / len(ue_notes[ue])
-            msg += f"• {ue} : *{moyenne:.2f}/20* ({len(ue_notes[ue])} notes)\n"
+    for ue in sorted(ue_dict.keys()):
+        if ue_dict[ue]:
+            moyenne = sum(ue_dict[ue]) / len(ue_dict[ue])
+            msg += f"• {ue} : *{moyenne:.2f}/20* ({len(ue_dict[ue])} notes)\n"
         else:
             msg += f"• {ue} : _aucune note_\n"
 
-    if not ue_codes:
+    if not ue_dict:
         msg += "Aucune UE trouvée."
 
     return msg
