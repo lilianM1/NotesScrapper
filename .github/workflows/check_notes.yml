@@ -48,3 +48,12 @@ jobs:
           else
             echo "Fichier notes.json introuvable, le script a dû échouer."
           fi
+
+      - name: Upload debug screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: |
+            *.png
+          retention-days: 3

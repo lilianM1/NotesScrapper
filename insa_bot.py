@@ -71,11 +71,10 @@ def executer():
         return
 
     with sync_playwright() as p:
-        # Ajout d'un user_agent pour éviter d'être détecté comme un robot basique
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(
-    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-)
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+        )
         page = context.new_page()
 
         try:
@@ -85,34 +84,55 @@ def executer():
             # --- LOGIN CAS ---
             if "cas" in page.url:
                 print("Authentification CAS...")
+                page.wait_for_selector("#username", state="visible", timeout=15000)
                 page.fill("#username", USERNAME)
                 page.fill("#password", PASSWORD)
-                page.keyboard.press("Enter")
+                page.click("button[type='submit'], input[type='submit']")
                 
-                # ATTENDRE QUE LA PAGE CHARGE COMPLÈTEMENT
-                # "networkidle" attend qu'il n'y ait plus de trafic réseau pendant 500ms
+                # Attendre la fin du chargement
                 page.wait_for_load_state("networkidle", timeout=60000)
+                
+                # Vérifier si on est toujours sur CAS (= échec login)
+                if "cas" in page.url:
+                    print(f"⚠️ Échec authentification ! URL: {page.url}")
+                    page.screenshot(path="debug_cas_failed.png", full_page=True)
+                    envoyer_telegram("❌ *Erreur* : Échec de l'authentification CAS (identifiants incorrects ?)")
+                    return
+
+            print(f"Après login, URL: {page.url}")
+            page.screenshot(path="debug_after_login.png", full_page=True)
 
             # --- ACCÈS AUX NOTES ---
             print("Recherche du bouton des notes...")
-            # On utilise un sélecteur qui cherche n'importe quel input contenant "semestre"
-            selector_bouton = "input[value*='semestre']"
-
-            try:
-                # Attendre que l'élément soit réellement présent et cliquable
-                page.wait_for_selector(selector_bouton, state="visible", timeout=45000)
-                print("Bouton trouvé, clic...")
-                page.locator(selector_bouton).first.click(force=True)
-            except Exception as e:
-                print(f"Le bouton n'a pas été trouvé. URL actuelle : {page.url}")
-                page.screenshot(path="debug_bouton.png", full_page=True)
-                raise e
             
-            page.wait_for_selector(selector_bouton, state="visible", timeout=30000)
-            print("Bouton trouvé, clic en cours...")
+            # Essayer plusieurs sélecteurs possibles
+            selectors = [
+                "input[value*='semestre']",
+                "input[value*='Semestre']",
+                "a:has-text('notes')",
+                "a:has-text('Notes')",
+                "input[value*='notes']",
+                "button:has-text('notes')"
+            ]
             
-            # Forcer le clic si un élément invisible est devant
-            page.locator(selector_bouton).first.click(force=True)
+            bouton_trouve = False
+            for selector in selectors:
+                try:
+                    if page.locator(selector).first.is_visible(timeout=3000):
+                        print(f"Bouton trouvé avec: {selector}")
+                        page.locator(selector).first.click(force=True)
+                        bouton_trouve = True
+                        break
+                except:
+                    continue
+            
+            if not bouton_trouve:
+                print("❌ Aucun bouton de notes trouvé!")
+                print(f"URL actuelle: {page.url}")
+                print(f"Contenu HTML (extrait): {page.content()[:2000]}")
+                page.screenshot(path="debug_no_button.png", full_page=True)
+                envoyer_telegram("❌ *Erreur* : Bouton des notes introuvable sur l'extranet")
+                return
 
             # Attendre que le tableau des notes apparaisse
             page.wait_for_selector("table", timeout=30000)
@@ -134,16 +154,17 @@ def executer():
 
             comparer_et_notifier(notes_actuelles)
 
-        except PlaywrightTimeoutError:
+        except PlaywrightTimeoutError as e:
             page.screenshot(path="timeout_error.png", full_page=True)
+            print(f"Timeout Playwright. URL: {page.url}")
+            print(f"Détails: {e}")
             envoyer_telegram("❌ *Erreur INSA* : délai dépassé (timeout).")
-            page.screenshot(path="timeout_error.png", full_page=True)
-            print("Timeout Playwright.")
 
         except Exception as e:
             page.screenshot(path="error.png", full_page=True)
-            envoyer_telegram("❌ *Erreur INSA* : script interrompu.")
             print(f"Erreur technique : {e}")
+            print(f"URL: {page.url}")
+            envoyer_telegram(f"❌ *Erreur INSA* : {str(e)[:100]}")
 
         finally:
             browser.close()
