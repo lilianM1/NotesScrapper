@@ -1,3 +1,42 @@
+def format_ue():
+    """Liste toutes les UE et leur moyenne si dispo"""
+    notes = load_notes()
+    if not notes:
+        return "❌ Aucune donnée."
+
+    # Récupère tous les codes UE présents dans les matières
+    import re
+    ue_codes = set()
+    ue_notes = {}
+    for matiere, note in notes.items():
+        ue_match = re.match(r"(UE-[A-Z0-9-]+)", matiere)
+        if ue_match:
+            ue = ue_match.group(1)
+            ue_codes.add(ue)
+            try:
+                v = float(note.replace(",", "."))
+            except:
+                v = None
+            if ue not in ue_notes:
+                ue_notes[ue] = []
+            if v is not None:
+                ue_notes[ue].append(v)
+
+    msg = "📚 *Liste des UE*\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
+    for ue in sorted(ue_codes):
+        if ue in ue_notes and ue_notes[ue]:
+            moyenne = sum(ue_notes[ue]) / len(ue_notes[ue])
+            msg += f"• {ue} : *{moyenne:.2f}/20* ({len(ue_notes[ue])} notes)\n"
+        else:
+            msg += f"• {ue} : _aucune note_\n"
+
+    if not ue_codes:
+        msg += "Aucune UE trouvée."
+
+    return msg
+async def ue_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(format_ue(), parse_mode="Markdown")
 import os
 import json
 import asyncio
@@ -307,6 +346,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("notes", notes_cmd))
     app.add_handler(CommandHandler("stats", stats_cmd))
+    app.add_handler(CommandHandler("ue", ue_cmd))
     app.add_handler(CommandHandler("attente", attente_cmd))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("check", check_cmd))
