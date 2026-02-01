@@ -11,6 +11,21 @@ PASSWORD = os.getenv("INSA_PWD")
 
 CACHE_FILE = "notes.json"
 
+# --- VÉRIFICATION DES VARIABLES ---
+def verifier_config():
+    manquantes = []
+    if not TOKEN:
+        manquantes.append("TELEGRAM_TOKEN")
+    if not CHAT_ID:
+        manquantes.append("TELEGRAM_CHAT_ID")
+    if not USERNAME:
+        manquantes.append("INSA_USER")
+    if not PASSWORD:
+        manquantes.append("INSA_PWD")
+    
+    if manquantes:
+        raise ValueError(f"Variables d'environnement manquantes : {', '.join(manquantes)}")
+
 # --- TELEGRAM ---
 def envoyer_telegram(message):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -66,8 +81,10 @@ def comparer_et_notifier(notes_nouvelles):
 
 # --- SCRIPT PRINCIPAL ---
 def executer():
+    verifier_config()  # Ajoutez cette ligne au début
+    
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=False)
         page = browser.new_page()
 
         try:
