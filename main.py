@@ -56,12 +56,9 @@ def format_notes():
             # Extraction du coef si présent dans le nom
             coef_match = re.search(r"\((\d+(?:,\d+)?)\)", matiere)
             coef = coef_match.group(1) if coef_match else "?"
-            # Nom complet sans coupure
-            nom = re.sub(r"\s*\(\d+(?:,\d+)?\)", "", matiere)
-            # Si c'est un stage, garder le nom complet
-            if "Stage" in matiere or "stage" in matiere:
-                nom = matiere
-            # Ne pas tronquer le nom
+            # Nom complet sans coupure, sans coef, sans tiret final
+            nom = re.sub(r"\s*\(\d+(?:,\d+)?\)", "", matiere)  # retire le coef
+            nom = nom.rstrip(" -")  # retire le tiret final
             msg += f"📚 {nom}\n      Note: {note} │ Coef: {coef}\n\n"
 
     msg += "━━━━━━━━━━━━━━━━━━━━\n"
