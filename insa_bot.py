@@ -11,21 +11,6 @@ PASSWORD = os.getenv("INSA_PWD")
 
 CACHE_FILE = "notes.json"
 
-# --- VÉRIFICATION DES VARIABLES ---
-def verifier_config():
-    manquantes = []
-    if not TOKEN:
-        manquantes.append("TELEGRAM_TOKEN")
-    if not CHAT_ID:
-        manquantes.append("TELEGRAM_CHAT_ID")
-    if not USERNAME:
-        manquantes.append("INSA_USER")
-    if not PASSWORD:
-        manquantes.append("INSA_PWD")
-    
-    if manquantes:
-        raise ValueError(f"Variables d'environnement manquantes : {', '.join(manquantes)}")
-
 # --- TELEGRAM ---
 def envoyer_telegram(message):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -81,19 +66,21 @@ def comparer_et_notifier(notes_nouvelles):
 
 # --- SCRIPT PRINCIPAL ---
 def executer():
-    verifier_config()  # Ajoutez cette ligne au début
-    
+    if not USERNAME or not PASSWORD:
+        print("Erreur : Les identifiants INSA_USER ou INSA_PWD sont vides !")
+        return
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        page = browser.new_page()
+        # Ajout d'un user_agent pour éviter d'être détecté comme un robot basique
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+)
+        page = context.new_page()
 
         try:
             print("Connexion à l'extranet INSA...")
-            page.goto(
-                "https://extranet.insa-strasbourg.fr/",
-                wait_until="networkidle",
-                timeout=60000
-            )
+            page.goto("https://extranet.insa-strasbourg.fr/", wait_until="domcontentloaded", timeout=60000)
 
             # --- LOGIN CAS ---
             if "cas" in page.url:
@@ -101,17 +88,23 @@ def executer():
                 page.fill("#username", USERNAME)
                 page.fill("#password", PASSWORD)
                 page.keyboard.press("Enter")
-
-                page.wait_for_selector(
-                    "text=Consulter vos notes",
-                    timeout=30000
-                )
+                
+                # On attend que la page post-connexion charge
+                page.wait_for_load_state("networkidle")
 
             # --- ACCÈS AUX NOTES ---
-            print("Ouverture des notes du 1er semestre...")
-            bouton = page.locator("input[value*='1er semestre']").first
-            bouton.click(force=True)
+            print("Recherche du bouton des notes...")
+            # Utilisation d'un sélecteur plus robuste (contient 'semestre' et est un bouton)
+            # On attend qu'il soit attaché au DOM avant de cliquer
+            selector_bouton = "input[type='submit'][value*='semestre']"
+            
+            page.wait_for_selector(selector_bouton, state="visible", timeout=30000)
+            print("Bouton trouvé, clic en cours...")
+            
+            # Forcer le clic si un élément invisible est devant
+            page.locator(selector_bouton).first.click(force=True)
 
+            # Attendre que le tableau des notes apparaisse
             page.wait_for_selector("table", timeout=30000)
 
             # --- EXTRACTION DES NOTES ---
