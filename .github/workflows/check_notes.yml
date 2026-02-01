@@ -18,12 +18,25 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip" # Active le cache pip automatiquement
+          cache: "pip"
 
-      - name: Installer dépendances
-        run: |
-          pip install -r requirements.txt
-          playwright install --with-deps chromium
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Installer dépendances Python
+        run: pip install -r requirements.txt
+
+      - name: Installer Chromium (si pas en cache)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: playwright install --with-deps chromium
+
+      - name: Installer dépendances système Playwright
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: playwright install-deps chromium
 
       - name: Lancer le bot
         env:
