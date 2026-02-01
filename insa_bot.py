@@ -28,7 +28,7 @@ def envoyer_telegram(message):
 def comparer_et_notifier(notes_nouvelles):
     try:
         if os.path.exists(CACHE_FILE):
-            with open(CACHE_FILE, "r") as f:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
                 notes_anciennes = json.load(f)
         else:
             notes_anciennes = {}
@@ -58,7 +58,7 @@ def comparer_et_notifier(notes_nouvelles):
     else:
         print("RAS : aucune nouvelle note.")
 
-    with open(CACHE_FILE, "w") as f:
+    with open(CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(notes_nouvelles, f, indent=4, ensure_ascii=False)
 
 # --- SCRIPT PRINCIPAL ---
