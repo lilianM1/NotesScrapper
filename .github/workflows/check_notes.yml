@@ -26,6 +26,11 @@ jobs:
         run: |
           git config --global user.name "InsaBot"
           git config --global user.email "bot@insa.fr"
+          # On vérifie si le fichier a été modifié avant de commit
           git add notes.json
-          git commit -m "MAJ Cache Notes" || exit 0
-          git push
+          if git diff --staged --quiet; then
+            echo "Aucune modification à sauvegarder."
+          else
+            git commit -m "MAJ Cache Notes"
+            git push
+          fi
