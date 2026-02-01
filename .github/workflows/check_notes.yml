@@ -1,36 +1,44 @@
 name: Surveillance Notes
 on:
   schedule:
-    - cron: "*/5 * * * *"
-  workflow_dispatch:
+    - cron: "*/5 * * * *" # S'exécute toutes les 5 minutes
+  workflow_dispatch: # Permet de le lancer manuellement
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with: { python-version: "3.9" }
-      - name: Install
+        with:
+          persist-credentials: true
+
+      - name: Installer Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Installer Playwright et Dépendances
         run: |
           pip install playwright requests
           playwright install chromium
-      - name: Run
+
+      - name: Lancer le Bot
         env:
           INSA_USER: ${{ secrets.INSA_USER }}
           INSA_PWD: ${{ secrets.INSA_PWD }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python insa_bot.py
-      - name: Save Cache
+
+      - name: Sauvegarder le Cache
         run: |
           git config --global user.name "InsaBot"
           git config --global user.email "bot@insa.fr"
-          # On vérifie si le fichier a été modifié avant de commit
           git add notes.json
-          if git diff --staged --quiet; then
-            echo "Aucune modification à sauvegarder."
-          else
-            git commit -m "MAJ Cache Notes"
+          # On commit et push seulement si le fichier a changé
+          if ! git diff --staged --quiet; then
+            git commit -m "MAJ Cache Notes [skip ci]"
             git push
+          else
+            echo "Aucun changement dans les notes, rien à sauvegarder."
           fi
