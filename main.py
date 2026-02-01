@@ -36,6 +36,10 @@ def save_notes(notes):
     with open(NOTES_FILE, "w", encoding="utf-8") as f:
         json.dump(notes, f, ensure_ascii=False, indent=2)
 
+    # ...rien d'autre ici...
+
+def format_notes():
+    """Formate les notes pour Telegram"""
     notes = load_notes()
     if not notes:
         return "❌ Aucune note enregistrée."
@@ -57,6 +61,7 @@ def save_notes(notes):
             # Si c'est un stage, garder le nom complet
             if "Stage" in matiere or "stage" in matiere:
                 nom = matiere
+            # Ne pas tronquer le nom
             msg += f"📚 {nom}\n      Note: {note} │ Coef: {coef}\n\n"
 
     msg += "━━━━━━━━━━━━━━━━━━━━\n"
