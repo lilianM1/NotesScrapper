@@ -59,8 +59,10 @@ def format_notes():
             # Nom de la matière sans code UE, sans coef, sans tiret final
             nom = re.sub(r"\s*\(\d+(?:,\d+)?\)", "", matiere)  # retire le coef
             nom = nom.rstrip(" -")  # retire le tiret final
-            # Si le nom contient des tirets, on prend le dernier segment (le vrai nom)
-            if '-' in nom:
+            # Si c'est un stage, garder le nom complet
+            if "Stage" in nom or "stage" in nom:
+                pass  # nom déjà complet
+            elif '-' in nom:
                 nom = nom.split('-')[-1].strip()
             msg += f"📚 {nom}\n      Note: {note} │ Coef: {coef}\n\n"
 
