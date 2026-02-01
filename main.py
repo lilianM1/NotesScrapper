@@ -1,3 +1,10 @@
+import os
+import json
+import asyncio
+import logging
+from datetime import datetime
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 def format_ue():
     """Liste toutes les UE et leur moyenne si dispo"""
     notes = load_notes()
@@ -42,8 +49,6 @@ import json
 import asyncio
 import logging
 from datetime import datetime
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
 
 # Logging
 logging.basicConfig(
