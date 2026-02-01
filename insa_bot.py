@@ -93,66 +93,33 @@ def executer():
             print("Attente du chargement de l'extranet...")
             page.wait_for_load_state("networkidle", timeout=30000)
             
-            print(f"Page chargée, URL: {page.url}")
+            print(f"✅ Connecté ! URL: {page.url}")
             page.screenshot(path="debug_after_login.png", full_page=True)
 
-            # --- ACCÈS AUX NOTES ---
-            print("Recherche du bouton des notes...")
+            # --- ACCÈS AUX NOTES DU 1ER SEMESTRE ---
+            print("Clic sur 'Consulter vos notes du 1er semestre'...")
             
-            # Essayer plusieurs sélecteurs possibles
-            selectors = [
-                "input[value*='semestre']",
-                "input[value*='Semestre']",
-                "input[value*='Notes']",
-                "input[value*='notes']",
-                "a:has-text('Notes du semestre')",
-                "a:has-text('notes')",
-                "a:has-text('Notes')",
-                "button:has-text('notes')",
-                "a[href*='note']",
-            ]
+            # Chercher le bouton exact
+            bouton = page.locator("input[value*='1er semestre']")
+            if not bouton.is_visible(timeout=5000):
+                # Essayer avec un autre sélecteur
+                bouton = page.locator("input[value*='1er']")
             
-            bouton_trouve = False
-            for selector in selectors:
-                try:
-                    locator = page.locator(selector).first
-                    if locator.is_visible(timeout=2000):
-                        texte = locator.inner_text() if locator.evaluate("el => el.tagName") != "INPUT" else locator.get_attribute("value")
-                        print(f"Bouton trouvé avec: {selector} -> '{texte}'")
-                        locator.click()
-                        bouton_trouve = True
-                        break
-                except:
-                    continue
-            
-            if not bouton_trouve:
-                # Debug: afficher les éléments disponibles
-                print("❌ Aucun bouton de notes trouvé!")
-                print(f"URL actuelle: {page.url}")
-                
-                # Lister les liens
-                links = page.locator("a").all()
-                print(f"\nLiens trouvés ({len(links)}):")
-                for i, link in enumerate(links[:15]):
+            if bouton.is_visible(timeout=3000):
+                bouton.click()
+                print("Bouton cliqué !")
+            else:
+                print("❌ Bouton 1er semestre non trouvé")
+                # Lister tous les inputs pour debug
+                inputs = page.locator("input").all()
+                for inp in inputs:
                     try:
-                        txt = link.inner_text().strip().replace('\n', ' ')[:60]
-                        href = link.get_attribute('href') or ''
-                        print(f"  {i+1}. '{txt}' -> {href[:50]}")
+                        val = inp.get_attribute("value") or ""
+                        print(f"  Input trouvé: '{val}'")
                     except:
                         pass
-                
-                # Lister les boutons input
-                inputs = page.locator("input[type='submit'], input[type='button']").all()
-                print(f"\nBoutons trouvés ({len(inputs)}):")
-                for i, inp in enumerate(inputs[:10]):
-                    try:
-                        val = inp.get_attribute('value') or inp.get_attribute('name') or '???'
-                        print(f"  {i+1}. '{val}'")
-                    except:
-                        pass
-                
                 page.screenshot(path="debug_no_button.png", full_page=True)
-                envoyer_telegram("❌ *Erreur* : Bouton des notes introuvable sur l'extranet")
+                envoyer_telegram("❌ Bouton des notes introuvable")
                 return
 
             # Attendre que la page des notes charge
@@ -176,14 +143,15 @@ def executer():
                     if len(cells) >= 3:
                         matiere = " ".join(cells[1].inner_text().split())
                         note = cells[2].inner_text().strip()
-                        if matiere and matiere != "Matière":
+                        if matiere and matiere.lower() not in ["matière", "matiere", ""]:
                             notes_actuelles[matiere] = note
+                            print(f"  -> {matiere}: {note}")
 
             if notes_actuelles:
-                print(f"Notes extraites: {len(notes_actuelles)}")
+                print(f"\n✅ {len(notes_actuelles)} notes extraites")
                 comparer_et_notifier(notes_actuelles)
             else:
-                print("Aucune note trouvée dans les tableaux.")
+                print("⚠️ Aucune note trouvée dans les tableaux.")
                 envoyer_telegram("⚠️ Aucune note trouvée sur l'extranet.")
 
         except PlaywrightTimeoutError as e:
