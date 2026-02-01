@@ -2,7 +2,7 @@ name: INSA Notes Bot
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/10 * * * *" # Every 10 minutes
   workflow_dispatch:
 
 permissions:
