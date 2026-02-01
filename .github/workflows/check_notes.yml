@@ -22,7 +22,7 @@ jobs:
 
       - name: Installer dépendances
         run: |
-          pip install playwright requests
+          pip install -r requirements.txt
           playwright install --with-deps chromium
 
       - name: Lancer le bot
