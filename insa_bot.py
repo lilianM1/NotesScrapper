@@ -26,13 +26,18 @@ def envoyer_telegram(message):
 
 # --- COMPARAISON DES NOTES ---
 def comparer_et_notifier(notes_nouvelles):
+    notes_anciennes = {}
     try:
         if os.path.exists(CACHE_FILE):
-            with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                notes_anciennes = json.load(f)
-        else:
-            notes_anciennes = {}
-    except json.JSONDecodeError:
+            # Essayer plusieurs encodages au cas où le fichier existant a un mauvais encodage
+            for encoding in ["utf-8", "latin-1", "cp1252"]:
+                try:
+                    with open(CACHE_FILE, "r", encoding=encoding) as f:
+                        notes_anciennes = json.load(f)
+                    break
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+    except Exception:
         notes_anciennes = {}
 
     changements = []
