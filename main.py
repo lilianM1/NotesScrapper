@@ -77,28 +77,35 @@ def format_stats():
     notes = load_notes()
     if not notes:
         return "❌ Aucune donnée."
-    
+
     dispo = [(m, n) for m, n in notes.items() if n and n.strip() and n != "-"]
-    moyennes = []
-    for _, n in dispo:
+    ue_dict = {}
+    import re
+    for matiere, note in dispo:
+        # Cherche le code UE au début du nom (ex: UE-GEC-STM-GE-01)
+        ue_match = re.match(r"(UE-[A-Z0-9-]+)", matiere)
+        if ue_match:
+            ue = ue_match.group(1)
+        else:
+            ue = "Autres"
         try:
-            v = float(n.replace(",", "."))
-            if v <= 20:
-                moyennes.append(v)
+            v = float(note.replace(",", "."))
         except:
-            pass
-    
-    msg = "📈 *STATISTIQUES*\n"
+            continue
+        if ue not in ue_dict:
+            ue_dict[ue] = []
+        ue_dict[ue].append(v)
+
+    msg = "� *MOYENNES PAR UE*\n"
     msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-    msg += f"📊 Notes disponibles: *{len(dispo)}/{len(notes)}*\n"
-    msg += f"⏳ En attente: *{len(notes) - len(dispo)}*\n\n"
-    
-    if moyennes:
-        moyenne = sum(moyennes) / len(moyennes)
-        msg += f"📉 Moyenne: *{moyenne:.2f}/20*\n"
-        msg += f"🏆 Meilleure: *{max(moyennes):.1f}/20*\n"
-        msg += f"📍 Plus basse: *{min(moyennes):.1f}/20*\n"
-    
+    for ue, notes_ue in ue_dict.items():
+        if notes_ue:
+            moyenne = sum(notes_ue) / len(notes_ue)
+            msg += f"• {ue} : *{moyenne:.2f}/20* ({len(notes_ue)} notes)\n"
+
+    if not ue_dict:
+        msg += "Aucune note disponible pour calculer les moyennes."
+
     return msg
 
 def format_attente():
