@@ -40,11 +40,8 @@ def comparer_et_notifier(notes_nouvelles):
     for matiere, note in notes_nouvelles.items():
         ancienne = notes_anciennes.get(matiere)
 
-        # Nouvelle note
         if ancienne is None and note != "-":
             changements.append(f"📚 *{matiere}*\n➡️ Nouvelle note : *{note}*")
-
-        # Note publiée ou modifiée
         elif ancienne != note and note != "-":
             changements.append(
                 f"📚 *{matiere}*\n"
@@ -82,26 +79,26 @@ def executer():
             page.goto("https://extranet.insa-strasbourg.fr/", wait_until="domcontentloaded", timeout=60000)
 
             # --- LOGIN CAS ---
-            if "cas" in page.url:
+            # Vérifier si on est sur la page de login CAS (pas juste "cas" dans l'URL)
+            if "cas.insa-strasbourg.fr" in page.url or page.locator("#username").is_visible():
                 print("Authentification CAS...")
                 page.wait_for_selector("#username", state="visible", timeout=15000)
                 page.fill("#username", USERNAME)
                 page.fill("#password", PASSWORD)
                 page.click("button[type='submit'], input[type='submit']")
-                
-                # Attendre la fin du chargement
-                page.wait_for_load_state("networkidle", timeout=60000)
-                
-                # Vérifier si on est toujours sur CAS (= échec login)
-                if "cas" in page.url:
-                    print(f"⚠️ Échec authentification ! URL: {page.url}")
-                    page.screenshot(path="debug_cas_failed.png", full_page=True)
-                    envoyer_telegram("❌ *Erreur* : Échec de l'authentification CAS (identifiants incorrects ?)")
-                    return
-
+            
+            # Attendre la redirection complète vers l'extranet
+            print("Attente de la redirection...")
+            page.wait_for_url("**/extranet.insa-strasbourg.fr/**", timeout=30000)
+            page.wait_for_load_state("networkidle", timeout=30000)
+            
             print(f"Après login, URL: {page.url}")
             page.screenshot(path="debug_after_login.png", full_page=True)
 
+            # Vérifier qu'on est bien connecté (chercher un élément de l'extranet)
+            # Attendre que la page de l'extranet soit chargée
+            page.wait_for_selector("body", timeout=10000)
+            
             # --- ACCÈS AUX NOTES ---
             print("Recherche du bouton des notes...")
             
@@ -111,34 +108,59 @@ def executer():
                 "input[value*='Semestre']",
                 "a:has-text('notes')",
                 "a:has-text('Notes')",
+                "a:has-text('Notes du semestre')",
                 "input[value*='notes']",
-                "button:has-text('notes')"
+                "button:has-text('notes')",
+                "a[href*='note']",
+                "input[type='submit']"
             ]
             
             bouton_trouve = False
             for selector in selectors:
                 try:
-                    if page.locator(selector).first.is_visible(timeout=3000):
+                    locator = page.locator(selector).first
+                    if locator.is_visible(timeout=2000):
                         print(f"Bouton trouvé avec: {selector}")
-                        page.locator(selector).first.click(force=True)
+                        locator.click(force=True)
                         bouton_trouve = True
                         break
                 except:
                     continue
             
             if not bouton_trouve:
+                # Lister tous les liens et boutons visibles pour debug
                 print("❌ Aucun bouton de notes trouvé!")
                 print(f"URL actuelle: {page.url}")
-                print(f"Contenu HTML (extrait): {page.content()[:2000]}")
+                
+                # Debug: afficher les liens disponibles
+                links = page.locator("a").all()
+                print(f"Liens trouvés ({len(links)}):")
+                for link in links[:10]:
+                    try:
+                        print(f"  - {link.inner_text()[:50]} -> {link.get_attribute('href')}")
+                    except:
+                        pass
+                
+                inputs = page.locator("input[type='submit']").all()
+                print(f"Boutons submit trouvés ({len(inputs)}):")
+                for inp in inputs[:10]:
+                    try:
+                        print(f"  - {inp.get_attribute('value')}")
+                    except:
+                        pass
+                
                 page.screenshot(path="debug_no_button.png", full_page=True)
                 envoyer_telegram("❌ *Erreur* : Bouton des notes introuvable sur l'extranet")
                 return
 
             # Attendre que le tableau des notes apparaisse
+            page.wait_for_load_state("networkidle", timeout=30000)
             page.wait_for_selector("table", timeout=30000)
 
             # --- EXTRACTION DES NOTES ---
             print("Extraction des notes...")
+            page.screenshot(path="debug_notes_page.png", full_page=True)
+            
             notes_actuelles = {}
 
             tables = page.locator("table").all()
@@ -152,7 +174,11 @@ def executer():
                         if matiere:
                             notes_actuelles[matiere] = note
 
-            comparer_et_notifier(notes_actuelles)
+            if notes_actuelles:
+                comparer_et_notifier(notes_actuelles)
+            else:
+                print("Aucune note trouvée dans les tableaux.")
+                envoyer_telegram("⚠️ Aucune note trouvée sur l'extranet.")
 
         except PlaywrightTimeoutError as e:
             page.screenshot(path="timeout_error.png", full_page=True)
