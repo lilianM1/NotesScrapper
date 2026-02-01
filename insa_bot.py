@@ -29,18 +29,16 @@ def comparer_et_notifier(notes_neuves):
 
     for matiere, note in notes_neuves.items():
         if matiere in notes_anciennes:
-            # Détection : passage d'un tiret à une note
             if notes_anciennes[matiere] == "-" and note != "-":
                 nouvelles_notes.append(f"📚 *{matiere}* : {note}")
         elif notes_anciennes and note != "-":
-            # Si une nouvelle matière apparaît directement avec une note
             nouvelles_notes.append(f"📚 *{matiere}* : {note}")
     
     if nouvelles_notes:
         envoyer_telegram("🔔 *NOUVELLE NOTE DÉTECTÉE !*\n\n" + "\n".join(nouvelles_notes))
-        print(f"Succès : {len(nouvelles_notes)} nouvelle(s) note(s) envoyée(s).")
+        print(f"Succès : {len(nouvelles_notes)} note(s) envoyée(s).")
     else:
-        print("RAS : Le scan a été effectué, aucune nouvelle note détectée.")
+        print("RAS : Aucune nouvelle note détectée.")
 
     with open(fichier_cache, "w") as f:
         json.dump(notes_neuves, f, indent=4)
@@ -48,30 +46,28 @@ def comparer_et_notifier(notes_neuves):
 def executer():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
-        page = context.new_page()
+        page = browser.new_page()
         
         try:
-            print("Accès à l'extranet...")
+            print("Connexion à l'extranet...")
             page.goto("https://extranet.insa-strasbourg.fr/", wait_until="networkidle", timeout=60000)
             
             if "cas/login" in page.url:
-                print("Authentification SSO en cours...")
+                print("Saisie des identifiants...")
                 page.fill("#username", USERNAME)
                 page.fill("#password", PASSWORD)
                 page.keyboard.press("Enter")
                 page.wait_for_url("**/extranet.insa-strasbourg.fr/**", timeout=30000)
 
             print("Recherche du bouton des notes...")
-            # Attente plus longue et sélecteur plus large pour éviter le Timeout
+            # Attente prolongée et clic JavaScript forcé pour les serveurs GitHub
             page.wait_for_selector("input[value*='1er semestre']", state="visible", timeout=45000)
-            page.click("input[value*='1er semestre']", force=True)
+            page.evaluate("document.querySelector(\"input[value*='1er semestre']\").click()")
             
-            print("Extraction des données...")
+            print("Extraction des notes...")
             page.wait_for_selector("table", timeout=30000)
             
             notes_actuelles = {}
-            # On cible les petites tables imbriquées contenant les matières
             tables = page.locator("td > table").all()
             for t in tables:
                 for row in t.locator("tr").all():
@@ -79,8 +75,7 @@ def executer():
                     if len(cells) >= 3:
                         m = " ".join(cells[1].inner_text().split())
                         n = cells[2].inner_text().strip()
-                        if m: 
-                            notes_actuelles[m] = n
+                        if m: notes_actuelles[m] = n
             
             comparer_et_notifier(notes_actuelles)
         except Exception as e:
