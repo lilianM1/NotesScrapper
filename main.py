@@ -1,3 +1,17 @@
+def get_ue_grouping():
+    """Regroupe les matières par UE en se basant sur le nom UE dans le tableau."""
+    notes = load_notes()
+    ue_matieres = {}
+    ue_courante = None
+    for matiere in notes.keys():
+        # Si la matière commence par 'UE-', c'est une UE
+        if matiere.startswith("UE-"):
+            ue_courante = matiere
+            if ue_courante not in ue_matieres:
+                ue_matieres[ue_courante] = []
+        elif ue_courante:
+            ue_matieres[ue_courante].append(matiere)
+    return ue_matieres
 import os
 import json
 import asyncio
@@ -13,39 +27,30 @@ def format_ue():
 
     # Regroupe par préfixe de code matière (avant le deuxième tiret)
     import re
-    ue_matieres = {}
-    ue_notes = {}
-    for matiere, note in notes.items():
-        match = re.match(r"([A-Z]+-[A-Z]+-\d+)", matiere)
-        if match:
-            ue = match.group(1)
-        else:
-            ue = "Autres"
-        if ue not in ue_matieres:
-            ue_matieres[ue] = []
-        ue_matieres[ue].append(matiere)
-        try:
-            v = float(note.replace(",", "."))
-        except:
-            v = None
-        if ue not in ue_notes:
-            ue_notes[ue] = {}
-        ue_notes[ue][matiere] = v
-
+    ue_matieres = get_ue_grouping()
+    notes = load_notes()
     msg = "📚 *Liste des UE*\n"
     msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
     for ue in sorted(ue_matieres.keys()):
         matieres = ue_matieres[ue]
-        notes_ue = [ue_notes[ue][m] for m in matieres]
-        if all(n is not None for n in notes_ue):
+        notes_ue = []
+        toutes_notes = True
+        for m in matieres:
+            note = notes.get(m)
+            try:
+                v = float(note.replace(",", "."))
+            except:
+                v = None
+            if v is None:
+                toutes_notes = False
+            notes_ue.append(v)
+        if toutes_notes and notes_ue:
             moyenne = sum(notes_ue) / len(notes_ue)
             msg += f"• {ue} : *{moyenne:.2f}/20* ({len(notes_ue)} notes)\n"
         else:
             msg += f"• {ue} : _incomplète_\n"
-
     if not ue_matieres:
         msg += "Aucune UE trouvée."
-
     return msg
 async def ue_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(format_ue(), parse_mode="Markdown")
