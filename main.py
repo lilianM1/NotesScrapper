@@ -5,12 +5,11 @@ import json
 from datetime import datetime
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import insa_bot  # Import scraping logic
 
 # --- CONFIGURATION ---
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-AUTHORIZED_USER_ID = os.getenv("TELEGRAM_CHAT_ID") # Pour restreindre l'accès
+AUTHORIZED_USER_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 # --- LOGGING ---
 logging.basicConfig(
@@ -38,7 +37,6 @@ async def view_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         if os.path.exists("notes.json"):
-            # open with appropriate encoding
             with open("notes.json", "r", encoding="utf-8") as f:
                 notes = json.load(f)
         else:
@@ -50,12 +48,9 @@ async def view_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         message = "📚 *Notes actuelles (Cache):*\n\n"
         for matiere, note in notes.items():
-            # CORRECTION ICI: On traite 'note' directement comme une chaine de caractères
             if isinstance(note, dict):
-                # Si jamais le format change un jour pour devenir un objet
                 valeur = note.get('note', note.get('moyenne', str(note)))
             else:
-                # Format actuel: "Matiere": "Note"
                 valeur = str(note)
                 
             message += f"• *{matiere}* : `{valeur}`\n"
@@ -66,18 +61,25 @@ async def view_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Erreur lecture : {e}")
 
 async def run_scraping():
-    """Exécute insa_bot.executer() dans un thread séparé pour ne pas bloquer le bot"""
+    """Fonction principale de scraping (utilitaire)"""
     global last_check_time
-    logging.info("⏳ Lancement du scraping périodique...")
+    logging.info("⏳ Lancement du scraping...")
     last_check_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     
     loop = asyncio.get_running_loop()
     try:
-        # On utilise run_in_executor car insa_bot est bloquant (sync)
+        # Exécute le code bloquant (playwright sync) dans un thread à part
         await loop.run_in_executor(None, insa_bot.executer)
         logging.info("✅ Scraping terminé.")
+        return True
     except Exception as e:
         logging.error(f"❌ Erreur scraping background: {e}")
+        return False
+
+async def scheduled_job(context: ContextTypes.DEFAULT_TYPE):
+    """Ce job est appelé automatiquement par le JobQueue du bot"""
+    logging.info("⏰ Exécution automatique planifiée.")
+    await run_scraping()
 
 async def force_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if AUTHORIZED_USER_ID and str(update.effective_chat.id) != str(AUTHORIZED_USER_ID):
@@ -85,8 +87,11 @@ async def force_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_text("🕵️‍♂️ Vérification des notes lancée...")
-    await run_scraping()
-    await update.message.reply_text("✅ Vérification manuelle terminée.")
+    success = await run_scraping()
+    if success:
+        await update.message.reply_text("✅ Vérification terminée. Tapez /notes pour voir le résultat.")
+    else:
+        await update.message.reply_text("❌ Erreur lors de la vérification.")
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -112,11 +117,11 @@ def main():
     application.add_handler(CommandHandler("check", force_check))
     application.add_handler(CommandHandler("stats", stats))
 
-    # Scheduler pour vérifier les notes toutes les 20 minutes
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(run_scraping, "interval", minutes=20)
-    scheduler.start()
-    print("⏰ Planificateur démarré (check toutes les 20min)")
+    # REMPLACEMENT APSCHEDULER PAR JOBQUEUE DU BOT
+    # check toutes les 1200 secondes (20 minutes)
+    if application.job_queue:
+        application.job_queue.run_repeating(scheduled_job, interval=1200, first=10)
+        print("⏰ Planificateur intégré activé (20min)")
 
     # Lancement du bot
     print("✅ Bot prêt à recevoir des commandes.")
