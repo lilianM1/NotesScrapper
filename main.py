@@ -31,11 +31,15 @@ def format_ue():
     msg = "📚 *Liste des UE*\n"
     msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
     for ue, bloc in notes.items():
-        msg += f"*{ue}*\n"
-        msg += f"Moyenne UE : {bloc.get('moyenne', '-')}/20\n"
-        for mat, note in bloc.get('matieres', {}).items():
-            msg += f"  • {mat} : {note}\n"
-        msg += "\n"
+        if isinstance(bloc, dict):
+            msg += f"*{ue}*\n"
+            msg += f"Moyenne UE : {bloc.get('moyenne', '-')}/20\n"
+            for mat, note in bloc.get('matieres', {}).items():
+                msg += f"  • {mat} : {note}\n"
+            msg += "\n"
+        else:
+            msg += f"*{ue}* (format inattendu)\n"
+            msg += f"  Donnée brute : {bloc}\n\n"
     if not notes:
         msg += "Aucune UE trouvée."
     return msg
