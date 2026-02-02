@@ -270,28 +270,32 @@ async def run_scraper():
 
             # Extraction
             tables = await page.locator("table").all()
+            logger.info(f"Nombre de tables trouvées : {len(tables)}")
             ue_notes = {}
-            for table in tables:
+            for idx, table in enumerate(tables):
                 rows = await table.locator("tr").all()
+                logger.info(f"Table {idx+1} : {len(rows)} lignes")
                 ue_name = None
                 ue_moyenne = "-"
                 matieres = {}
-                for row in rows:
+                for r_idx, row in enumerate(rows):
                     cells = await row.locator("td").all()
+                    cell_texts = [await c.inner_text() for c in cells]
+                    logger.info(f"Table {idx+1}, ligne {r_idx+1} : {cell_texts}")
                     # Si la ligne a une seule cellule et commence par UE-
                     if len(cells) == 1:
-                        txt = (await cells[0].inner_text()).strip()
+                        txt = cell_texts[0].strip()
                         if txt.startswith("UE-"):
                             ue_name = txt
                     # Si la ligne a 3 cellules, c'est une matière
                     elif len(cells) == 3 and ue_name:
-                        matiere = " ".join((await cells[1].inner_text()).split())
-                        note = (await cells[2].inner_text()).strip()
+                        matiere = " ".join(cell_texts[1].split())
+                        note = cell_texts[2].strip()
                         if matiere and matiere.lower() not in ["matière", "matiere", ""]:
                             matieres[matiere] = note
                     # Si la ligne a 2 cellules, c'est la moyenne UE (colonne de droite)
                     elif len(cells) == 2 and ue_name:
-                        moy = (await cells[1].inner_text()).strip()
+                        moy = cell_texts[1].strip()
                         if moy:
                             ue_moyenne = moy
                 # Si on a trouvé une UE et des matières
