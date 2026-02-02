@@ -13,33 +13,37 @@ def format_ue():
 
     # Regroupe par préfixe de code matière (avant le deuxième tiret)
     import re
-    ue_dict = {}
+    ue_matieres = {}
+    ue_notes = {}
     for matiere, note in notes.items():
-        # Extrait le préfixe UE (ex: STM-GE-01)
         match = re.match(r"([A-Z]+-[A-Z]+-\d+)", matiere)
         if match:
             ue = match.group(1)
         else:
             ue = "Autres"
+        if ue not in ue_matieres:
+            ue_matieres[ue] = []
+        ue_matieres[ue].append(matiere)
         try:
             v = float(note.replace(",", "."))
         except:
             v = None
-        if ue not in ue_dict:
-            ue_dict[ue] = []
-        if v is not None:
-            ue_dict[ue].append(v)
+        if ue not in ue_notes:
+            ue_notes[ue] = {}
+        ue_notes[ue][matiere] = v
 
     msg = "📚 *Liste des UE*\n"
     msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-    for ue in sorted(ue_dict.keys()):
-        if ue_dict[ue]:
-            moyenne = sum(ue_dict[ue]) / len(ue_dict[ue])
-            msg += f"• {ue} : *{moyenne:.2f}/20* ({len(ue_dict[ue])} notes)\n"
+    for ue in sorted(ue_matieres.keys()):
+        matieres = ue_matieres[ue]
+        notes_ue = [ue_notes[ue][m] for m in matieres]
+        if all(n is not None for n in notes_ue):
+            moyenne = sum(notes_ue) / len(notes_ue)
+            msg += f"• {ue} : *{moyenne:.2f}/20* ({len(notes_ue)} notes)\n"
         else:
-            msg += f"• {ue} : _aucune note_\n"
+            msg += f"• {ue} : _incomplète_\n"
 
-    if not ue_dict:
+    if not ue_matieres:
         msg += "Aucune UE trouvée."
 
     return msg
