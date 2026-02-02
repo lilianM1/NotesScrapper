@@ -1,55 +1,11 @@
-def get_ue_grouping():
-    """Regroupe les matières par UE en se basant sur le nom UE dans le tableau."""
-    notes = load_notes()
-    ue_matieres = {}
-    ue_courante = None
-    for matiere in notes.keys():
-        # Si la matière commence par 'UE-', c'est une UE
-        if matiere.startswith("UE-"):
-            ue_courante = matiere
-            if ue_courante not in ue_matieres:
-                ue_matieres[ue_courante] = []
-        elif ue_courante:
-            ue_matieres[ue_courante].append(matiere)
-    return ue_matieres
 import os
 import json
 import asyncio
 import logging
+import re
 from datetime import datetime
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
-def format_ue():
-    """Liste toutes les UE et leur moyenne si dispo"""
-    notes = load_notes()
-    if not notes:
-        return "❌ Aucune donnée."
-
-    # Regroupe par préfixe de code matière (avant le deuxième tiret)
-    import re
-    notes = load_notes()
-    msg = "📚 *Liste des UE*\n"
-    msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-    for ue, bloc in notes.items():
-        if isinstance(bloc, dict):
-            msg += f"*{ue}*\n"
-            msg += f"Moyenne UE : {bloc.get('moyenne', '-')}/20\n"
-            for mat, note in bloc.get('matieres', {}).items():
-                msg += f"  • {mat} : {note}\n"
-            msg += "\n"
-        else:
-            msg += f"*{ue}* (format inattendu)\n"
-            msg += f"  Donnée brute : {bloc}\n\n"
-    if not notes:
-        msg += "Aucune UE trouvée."
-    return msg
-async def ue_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(format_ue(), parse_mode="Markdown")
-import os
-import json
-import asyncio
-import logging
-from datetime import datetime
 
 # Logging
 logging.basicConfig(
@@ -61,186 +17,132 @@ logger = logging.getLogger(__name__)
 # Configuration
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+INSA_USER = os.environ.get("INSA_USER")
+INSA_PWD = os.environ.get("INSA_PWD")
 NOTES_FILE = "notes.json"
 CHECK_INTERVAL = 300  # 5 minutes
 
+# === UTILITAIRES DE DONNÉES ===
+
 def load_notes():
-    """Charge les notes"""
+    """Charge les notes depuis le fichier JSON avec gestion d'encodage"""
     if not os.path.exists(NOTES_FILE):
         return {}
     for enc in ['utf-8', 'latin-1', 'cp1252']:
         try:
             with open(NOTES_FILE, "r", encoding=enc) as f:
                 return json.load(f)
-        except:
+        except Exception:
             continue
     return {}
 
 def save_notes(notes):
-    """Sauvegarde les notes"""
+    """Sauvegarde les notes au format JSON demandé"""
     with open(NOTES_FILE, "w", encoding="utf-8") as f:
         json.dump(notes, f, ensure_ascii=False, indent=2)
 
-    # ...rien d'autre ici...
-
-def format_notes():
-    """Formate les notes pour Telegram"""
-    notes = load_notes()
-    if not notes:
-        return "❌ Aucune note enregistrée."
-
-    dispo = [(m, n) for m, n in notes.items() if n and n.strip() and n != "-"]
-    attente = [(m, n) for m, n in notes.items() if not n or not n.strip() or n == "-"]
-
-    msg = "📊 *VOS NOTES*\n"
-    msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-
-    if dispo:
-        import re
-        for matiere, note in dispo:
-            # Extraction du coef si présent dans le nom
-            coef_match = re.search(r"\((\d+(?:,\d+)?)\)", matiere)
-            coef = coef_match.group(1) if coef_match else "?"
-            # Nom de la matière sans code UE, sans coef, sans tiret final
-            nom = re.sub(r"\s*\(\d+(?:,\d+)?\)", "", matiere)  # retire le coef
-            nom = nom.rstrip(" -")  # retire le tiret final
-            # Si c'est un stage, garder le nom complet
-            if "Stage" in nom or "stage" in nom:
-                pass  # nom déjà complet
-            elif '-' in nom:
-                nom = nom.split('-')[-1].strip()
-            msg += f"📚 {nom}\n      Note: {note} │ Coef: {coef}\n\n"
-
-    msg += "━━━━━━━━━━━━━━━━━━━━\n"
-    msg += f"⏳ En attente: {len(attente)} matières\n"
-    msg += "━━━━━━━━━━━━━━━━━━━━\n"
-    msg += f"📈 {len(dispo)}/{len(notes)} notes disponibles"
-    return msg
-            
-def format_stats():
-    """Statistiques"""
-    notes = load_notes()
-    if not notes:
-        return "❌ Aucune donnée."
-
-    dispo = [(m, n) for m, n in notes.items() if n and n.strip() and n != "-"]
-    ue_dict = {}
-    import re
-    for matiere, note in dispo:
-        # Cherche le code UE au début du nom (ex: UE-GEC-STM-GE-01)
-        ue_match = re.match(r"(UE-[A-Z0-9-]+)", matiere)
-        if ue_match:
-            ue = ue_match.group(1)
-        else:
-            ue = "Autres"
-        try:
-            v = float(note.replace(",", "."))
-        except:
-            continue
-        if ue not in ue_dict:
-            ue_dict[ue] = []
-        ue_dict[ue].append(v)
-
-    msg = "� *MOYENNES PAR UE*\n"
-    msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-    for ue, notes_ue in ue_dict.items():
-        if notes_ue:
-            moyenne = sum(notes_ue) / len(notes_ue)
-            msg += f"• {ue} : *{moyenne:.2f}/20* ({len(notes_ue)} notes)\n"
-
-    if not ue_dict:
-        msg += "Aucune note disponible pour calculer les moyennes."
-
-    return msg
-
-def format_attente():
-    """Liste des matières en attente"""
-    notes = load_notes()
-    if not notes:
-        return "❌ Aucune donnée."
-    
-    attente = [(m, n) for m, n in notes.items() if not n or not n.strip() or n == "-"]
-    
-    if not attente:
-        return "✅ Toutes les notes sont disponibles !"
-    
-    msg = "⏳ *NOTES EN ATTENTE*\n"
-    msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-    
-    for mat, _ in attente:
-        parts = mat.split(" - ")
-        if len(parts) >= 2:
-            segments = parts[0].split("-")
-            nom = segments[-1].strip() if len(segments) > 1 else parts[0]
-            coef = parts[-1].replace("(", "").replace(")", "").strip()
-        else:
-            nom = mat
-            coef = "?"
-        
-        if len(nom) > 25:
-            nom = nom[:22] + "..."
-        
-        msg += f"• {nom} (coef {coef})\n"
-    
-    msg += f"\n📊 *{len(attente)}* matières en attente"
-    return msg
+def clean_subject_name(raw_name):
+    """Nettoie le nom de la matière (enlève codes UE et coefficients)"""
+    # Enlève les parenthèses de coef ex: (1,5)
+    name = re.sub(r"\s*\(\d+(?:,\d+)?\)", "", raw_name)
+    # Enlève le code UE au début si présent (ex: UE-XXX-...)
+    if ' - ' in name:
+        name = name.split(' - ')[0]
+    if '-' in name:
+        parts = name.split('-')
+        # On prend la dernière partie qui est généralement le nom en clair
+        name = parts[-1].strip()
+    return name
 
 # === COMMANDES TELEGRAM ===
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
+    msg = (
         "🎓 *Bot INSA Notes*\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
-        "📚 /notes - Voir vos notes\n"
-        "📈 /stats - Statistiques\n"
-        "⏳ /attente - Notes en attente\n"
+        "📚 /notes - Voir toutes les notes par UE\n"
+        "📈 /stats - Moyennes par UE\n"
+        "⏳ /attente - Notes non encore parues\n"
         "🔄 /check - Forcer une vérification\n"
-        "❓ /help - Aide\n\n"
-        "_Vérification auto toutes les 5 min_",
-        parse_mode="Markdown"
+        "❓ /help - Aide\n"
     )
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 async def notes_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(format_notes(), parse_mode="Markdown")
+    notes = load_notes()
+    if not notes:
+        await update.message.reply_text("❌ Aucune donnée disponible.")
+        return
+
+    msg = "📊 *VOS NOTES PAR UE*\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
+
+    for ue, data in notes.items():
+        msg += f"🔹 *{ue}*\n"
+        moy_ue = data.get('moyenne', '-')
+        msg += f"  _Moyenne UE: {moy_ue}/20_\n"
+        
+        for mat, note in data.get('matieres', {}).items():
+            status = "✅" if note and note not in ["-", ""] else "⏳"
+            msg += f"  {status} {clean_subject_name(mat)} : *{note}*\n"
+        msg += "\n"
+
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(format_stats(), parse_mode="Markdown")
+    notes = load_notes()
+    if not notes:
+        await update.message.reply_text("❌ Aucune donnée.")
+        return
+
+    msg = "📈 *RÉSUMÉ DES MOYENNES*\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
+    
+    for ue, data in notes.items():
+        moy = data.get('moyenne', '-')
+        count = len([n for n in data.get('matieres', {}).values() if n and n not in ["-", ""]])
+        total = len(data.get('matieres', {}))
+        msg += f"• *{ue}* : `{moy}/20` ({count}/{total} notes)\n"
+
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 async def attente_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(format_attente(), parse_mode="Markdown")
+    notes = load_notes()
+    attente_list = []
+    
+    for ue, data in notes.items():
+        for mat, note in data.get('matieres', {}).items():
+            if not note or note in ["-", ""]:
+                attente_list.append((ue, clean_subject_name(mat)))
 
-async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🤖 *Aide - Bot INSA Notes*\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        "📚 /notes - Liste de vos notes\n"
-        "📈 /stats - Moyenne, min, max\n"
-        "⏳ /attente - Matières sans note\n"
-        "🔄 /check - Vérifier maintenant\n\n"
-        "_Le bot vérifie automatiquement_\n"
-        "_vos notes toutes les 5 minutes._",
-        parse_mode="Markdown"
-    )
+    if not attente_list:
+        await update.message.reply_text("✅ Toutes les notes sont publiées !")
+        return
+
+    msg = "⏳ *NOTES EN ATTENTE*\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
+    for ue, mat in attente_list:
+        msg += f"• {mat} _({ue})_\n"
+    
+    msg += f"\nTotal : {len(attente_list)} matières."
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 async def check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔄 Vérification en cours...")
+    await update.message.reply_text("🔄 Connexion à l'extranet en cours...")
     changes = await run_scraper()
     if changes:
-        await update.message.reply_text(f"✅ {len(changes)} nouvelle(s) note(s) détectée(s) !")
+        await update.message.reply_text(f"🔔 {len(changes)} nouvelle(s) note(s) !")
     else:
-        await update.message.reply_text("✅ Aucune nouvelle note.")
+        await update.message.reply_text("✅ Pas de nouvelles notes.")
 
-# === SCRAPER ===
+# === SCRAPER (PLAYWRIGHT) ===
 
 async def run_scraper():
-    """Exécute le scraper et retourne les changements"""
     from playwright.async_api import async_playwright
     
-    INSA_USER = os.environ.get("INSA_USER")
-    INSA_PWD = os.environ.get("INSA_PWD")
-    
     old_notes = load_notes()
-    new_notes = {}
+    new_ue_structure = {}
+    changes = []
 
     try:
         async with async_playwright() as p:
@@ -249,152 +151,100 @@ async def run_scraper():
 
             # Connexion
             await page.goto("https://extranet.insa-strasbourg.fr/", timeout=60000)
+            if await page.locator("#username").is_visible(timeout=5000):
+                await page.fill("#username", INSA_USER)
+                await page.fill("#password", INSA_PWD)
+                await page.click("button[type='submit'], input[type='submit']")
 
-            try:
-                if await page.locator("#username").is_visible(timeout=3000):
-                    await page.fill("#username", INSA_USER)
-                    await page.fill("#password", INSA_PWD)
-                    await page.click("button[type='submit'], input[type='submit']")
-            except:
-                pass
+            await page.wait_for_load_state("networkidle")
 
-            await page.wait_for_load_state("networkidle", timeout=30000)
+            # Aller sur les notes du semestre
+            bouton = page.locator("input[value*='1er semestre'], input[value*='2ème semestre']")
+            if await bouton.count() > 0:
+                await bouton.first.click()
+            
+            await page.wait_for_selector("table", timeout=15000)
 
-            # Clic sur notes
-            bouton = page.locator("input[value*='1er semestre']")
-            if await bouton.is_visible(timeout=5000):
-                await bouton.click()
-
-            await page.wait_for_load_state("networkidle", timeout=30000)
-            await page.wait_for_selector("table", timeout=30000)
-
-            # Extraction
+            # Parsing des tables
             tables = await page.locator("table").all()
-            logger.info(f"Nombre de tables trouvées : {len(tables)}")
-            ue_notes = {}
-            for idx, table in enumerate(tables):
+            for table in tables:
                 rows = await table.locator("tr").all()
-                logger.info(f"Table {idx+1} : {len(rows)} lignes")
-                ue_name = None
-                ue_moyenne = "-"
-                matieres = {}
-                for r_idx, row in enumerate(rows):
+                current_ue = None
+                
+                for row in rows:
                     cells = await row.locator("td").all()
-                    cell_texts = [await c.inner_text() for c in cells]
-                    logger.info(f"Table {idx+1}, ligne {r_idx+1} : {cell_texts}")
-                    # Si la ligne a une seule cellule et commence par UE-
-                    if len(cells) == 1:
-                        txt = cell_texts[0].strip()
-                        if txt.startswith("UE-"):
-                            ue_name = txt
-                    # Si la ligne a 3 cellules, c'est une matière
-                    elif len(cells) == 3 and ue_name:
-                        matiere = " ".join(cell_texts[1].split())
-                        note = cell_texts[2].strip()
-                        if matiere and matiere.lower() not in ["matière", "matiere", ""]:
-                            matieres[matiere] = note
-                    # Si la ligne a 2 cellules, c'est la moyenne UE (colonne de droite)
-                    elif len(cells) == 2 and ue_name:
-                        moy = cell_texts[1].strip()
-                        if moy:
-                            ue_moyenne = moy
-                # Si on a trouvé une UE et des matières
-                if ue_name and matieres:
-                    ue_notes[ue_name] = {"matieres": matieres, "moyenne": ue_moyenne}
+                    texts = [ (await c.inner_text()).strip() for c in cells ]
+                    
+                    if not texts: continue
+
+                    # Cas 1 : Ligne de titre d'UE (souvent 1 seule cellule large)
+                    if len(texts) == 1 and texts[0].startswith("UE-"):
+                        current_ue = texts[0]
+                        if current_ue not in new_ue_structure:
+                            new_ue_structure[current_ue] = {"matieres": {}, "moyenne": "-"}
+                    
+                    # Cas 2 : Ligne de matière (généralement 3 cellules : Code, Nom, Note)
+                    elif len(texts) == 3 and current_ue:
+                        # On ignore l'en-tête de tableau "Matière / Note"
+                        if texts[1].lower() in ["matière", "matiere"]: continue
+                        
+                        matiere_nom = texts[1]
+                        note_val = texts[2]
+                        new_ue_structure[current_ue]["matieres"][matiere_nom] = note_val
+                        
+                        # Détection de changement pour les notifs
+                        old_val = old_notes.get(current_ue, {}).get("matieres", {}).get(matiere_nom)
+                        if note_val and note_val != "-" and note_val != old_val:
+                            changes.append({"ue": current_ue, "mat": matiere_nom, "val": note_val})
+
+                    # Cas 3 : Ligne de moyenne d'UE (souvent 2 cellules à la fin de l'UE)
+                    elif len(texts) == 2 and current_ue and "moyenne" in texts[0].lower():
+                        new_ue_structure[current_ue]["moyenne"] = texts[1]
+
             await browser.close()
-
-            new_notes = ue_notes
-
+            
+            if new_ue_structure:
+                save_notes(new_ue_structure)
+                return changes
+                
     except Exception as e:
-        logger.error(f"Erreur scraping: {e}")
-        return []
-
-    # Trouver les changements
-    changes = []
-    for ue, bloc in new_notes.items():
-        for mat, note in bloc["matieres"].items():
-            old = old_notes.get(ue, {}).get("matieres", {}).get(mat)
-            if note and note != "-" and (not old or note != old):
-                changes.append({"matiere": mat, "ancienne": old, "nouvelle": note})
-
-    # Log du contenu extrait
-    logger.info(f"Contenu extrait (new_notes): {json.dumps(new_notes, ensure_ascii=False, indent=2)}")
-
-    # Sauvegarder
-    if new_notes:
-        save_notes(new_notes)
-
-    return changes
+        logger.error(f"Erreur Scraper: {e}")
+    return []
 
 # === TÂCHE AUTOMATIQUE ===
 
 async def scheduled_check(context: ContextTypes.DEFAULT_TYPE):
-    """Vérification programmée"""
-    logger.info("🔄 Vérification automatique...")
-    
-    try:
-        changes = await run_scraper()
+    logger.info("Auto-check en cours...")
+    changes = await run_scraper()
+    if changes:
+        msg = "🎉 *NOUVELLES NOTES DÉTECTÉES !*\n\n"
+        for c in changes:
+            msg += f"📍 *{c['ue']}*\n"
+            msg += f"📚 {clean_subject_name(c['mat'])}\n"
+            msg += f"➡️ Note : *{c['val']}*\n\n"
         
-        if changes:
-            msg = "🎉 *NOUVELLES NOTES !*\n"
-            msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-            
-            for c in changes:
-                # Extraire nom court
-                parts = c['matiere'].split(" - ")
-                if len(parts) >= 2:
-                    segments = parts[0].split("-")
-                    nom = segments[-1].strip() if len(segments) > 1 else parts[0]
-                    coef = parts[-1].replace("(", "").replace(")", "").strip()
-                else:
-                    nom = c['matiere'][:30]
-                    coef = "?"
-                
-                msg += f"📚 *{nom}*\n"
-                msg += f"      Note: *{c['nouvelle']}* │ Coef: {coef}\n\n"
-            
-            await context.bot.send_message(
-                chat_id=TELEGRAM_CHAT_ID,
-                text=msg,
-                parse_mode="Markdown"
-            )
-            logger.info(f"✅ {len(changes)} nouvelle(s) note(s)")
-        else:
-            logger.info("✅ RAS")
-            
-    except Exception as e:
-        logger.error(f"Erreur: {e}")
+        await context.bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=msg, parse_mode="Markdown")
 
 # === MAIN ===
 
 def main():
-    if not TELEGRAM_TOKEN:
-        print("❌ TELEGRAM_TOKEN manquant !")
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        logger.error("Tokens manquants dans les variables d'environnement")
         return
-    
-    # Créer l'application
+
     app = Application.builder().token(TELEGRAM_TOKEN).build()
-    
-    # Commandes
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("notes", notes_cmd))
     app.add_handler(CommandHandler("stats", stats_cmd))
-    app.add_handler(CommandHandler("ue", ue_cmd))
     app.add_handler(CommandHandler("attente", attente_cmd))
-    app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("check", check_cmd))
-    
-    # Job toutes les 5 minutes
-    app.job_queue.run_repeating(
-        scheduled_check,
-        interval=CHECK_INTERVAL,
-        first=10  # Premier check après 10 secondes
-    )
-    
-    logger.info("🚀 Bot démarré ! Vérification toutes les 5 min.")
-    
-    # Lancer le bot (polling)
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    app.add_handler(CommandHandler("ue", notes_cmd)) # Alias pour notes
+
+    app.job_queue.run_repeating(scheduled_check, interval=CHECK_INTERVAL, first=10)
+
+    logger.info("Bot lancé avec succès.")
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
