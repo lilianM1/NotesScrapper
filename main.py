@@ -27,29 +27,16 @@ def format_ue():
 
     # Regroupe par préfixe de code matière (avant le deuxième tiret)
     import re
-    ue_matieres = get_ue_grouping()
     notes = load_notes()
     msg = "📚 *Liste des UE*\n"
     msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-    for ue in sorted(ue_matieres.keys()):
-        matieres = ue_matieres[ue]
-        notes_ue = []
-        toutes_notes = True
-        for m in matieres:
-            note = notes.get(m)
-            try:
-                v = float(note.replace(",", "."))
-            except:
-                v = None
-            if v is None:
-                toutes_notes = False
-            notes_ue.append(v)
-        if toutes_notes and notes_ue:
-            moyenne = sum(notes_ue) / len(notes_ue)
-            msg += f"• {ue} : *{moyenne:.2f}/20* ({len(notes_ue)} notes)\n"
-        else:
-            msg += f"• {ue} : _incomplète_\n"
-    if not ue_matieres:
+    for ue, bloc in notes.items():
+        msg += f"*{ue}*\n"
+        msg += f"Moyenne UE : {bloc.get('moyenne', '-')}/20\n"
+        for mat, note in bloc.get('matieres', {}).items():
+            msg += f"  • {mat} : {note}\n"
+        msg += "\n"
+    if not notes:
         msg += "Aucune UE trouvée."
     return msg
 async def ue_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -250,15 +237,15 @@ async def run_scraper():
     
     old_notes = load_notes()
     new_notes = {}
-    
+
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
-            
+
             # Connexion
             await page.goto("https://extranet.insa-strasbourg.fr/", timeout=60000)
-            
+
             try:
                 if await page.locator("#username").is_visible(timeout=3000):
                     await page.fill("#username", INSA_USER)
@@ -266,46 +253,66 @@ async def run_scraper():
                     await page.click("button[type='submit'], input[type='submit']")
             except:
                 pass
-            
+
             await page.wait_for_load_state("networkidle", timeout=30000)
-            
+
             # Clic sur notes
             bouton = page.locator("input[value*='1er semestre']")
             if await bouton.is_visible(timeout=5000):
                 await bouton.click()
-            
+
             await page.wait_for_load_state("networkidle", timeout=30000)
             await page.wait_for_selector("table", timeout=30000)
-            
+
             # Extraction
             tables = await page.locator("table").all()
+            ue_notes = {}
             for table in tables:
                 rows = await table.locator("tr").all()
+                ue_name = None
+                ue_moyenne = "-"
+                matieres = {}
                 for row in rows:
                     cells = await row.locator("td").all()
-                    if len(cells) >= 3:
+                    # Si la ligne a une seule cellule et commence par UE-
+                    if len(cells) == 1:
+                        txt = (await cells[0].inner_text()).strip()
+                        if txt.startswith("UE-"):
+                            ue_name = txt
+                    # Si la ligne a 3 cellules, c'est une matière
+                    elif len(cells) == 3 and ue_name:
                         matiere = " ".join((await cells[1].inner_text()).split())
                         note = (await cells[2].inner_text()).strip()
                         if matiere and matiere.lower() not in ["matière", "matiere", ""]:
-                            new_notes[matiere] = note
-            
+                            matieres[matiere] = note
+                    # Si la ligne a 2 cellules, c'est la moyenne UE (colonne de droite)
+                    elif len(cells) == 2 and ue_name:
+                        moy = (await cells[1].inner_text()).strip()
+                        if moy:
+                            ue_moyenne = moy
+                # Si on a trouvé une UE et des matières
+                if ue_name and matieres:
+                    ue_notes[ue_name] = {"matieres": matieres, "moyenne": ue_moyenne}
             await browser.close()
-            
+
+            new_notes = ue_notes
+
     except Exception as e:
         logger.error(f"Erreur scraping: {e}")
         return []
-    
+
     # Trouver les changements
     changes = []
-    for mat, note in new_notes.items():
-        old = old_notes.get(mat)
-        if note and note != "-" and note != old:
-            changes.append({"matiere": mat, "ancienne": old, "nouvelle": note})
-    
+    for ue, bloc in new_notes.items():
+        for mat, note in bloc["matieres"].items():
+            old = old_notes.get(ue, {}).get("matieres", {}).get(mat)
+            if note and note != "-" and (not old or note != old):
+                changes.append({"matiere": mat, "ancienne": old, "nouvelle": note})
+
     # Sauvegarder
     if new_notes:
         save_notes(new_notes)
-    
+
     return changes
 
 # === TÂCHE AUTOMATIQUE ===
