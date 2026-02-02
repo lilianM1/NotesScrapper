@@ -50,7 +50,15 @@ async def view_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         message = "📚 *Notes actuelles (Cache):*\n\n"
         for matiere, note in notes.items():
-            message += f"• *{matiere}* : `{note}`\n"
+            # CORRECTION ICI: On traite 'note' directement comme une chaine de caractères
+            if isinstance(note, dict):
+                # Si jamais le format change un jour pour devenir un objet
+                valeur = note.get('note', note.get('moyenne', str(note)))
+            else:
+                # Format actuel: "Matiere": "Note"
+                valeur = str(note)
+                
+            message += f"• *{matiere}* : `{valeur}`\n"
             
         await update.message.reply_text(message, parse_mode="Markdown")
         
