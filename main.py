@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
-import insa_bot  # Import scraping logic
+import insa_bot
 
 # --- CONFIGURATION ---
 TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -30,68 +30,46 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def view_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Sécurité basique
-    if AUTHORIZED_USER_ID and str(update.effective_chat.id) != str(AUTHORIZED_USER_ID):
-        await update.message.reply_text("⛔ Accès non autorisé.")
+    # Charge le fichier JSON propre généré par insa_bot
+    if not os.path.exists("notes.json"):
+        await update.message.reply_text("📂 Pas encore de notes.")
         return
 
-    try:
-        if os.path.exists("notes.json"):
-            with open("notes.json", "r", encoding="utf-8") as f:
-                notes = json.load(f)
+    with open("notes.json", "r", encoding="utf-8") as f:
+        notes = json.load(f)
+
+    notes_dispo = {}
+    notes_attente = []
+
+    for nom, data in notes.items():
+        # Data est mnt toujours un dict {"note": "15", "coef": "2"} grâce au nouveau scraper
+        note = data.get("note", "-")
+        coef = data.get("coef", "?")
+        
+        if note in ["-", "", None]:
+            notes_attente.append(nom)
         else:
-            notes = {}
+            notes_dispo[nom] = {"n": note, "c": coef}
 
-        if not notes:
-            await update.message.reply_text("📂 Aucune note en cache.")
-            return
+    # --- AFFICHAGE IDENTIQUE A LA DEMANDE ---
+    msg = "📊 *VOS NOTES*\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
 
-        # Séparation des notes disponibles et en attente
-        # On considère qu'une note "-" ou vide ou "en attente" est une matière sans note
-        notes_dispo = {}
-        notes_attente = []
+    if notes_dispo:
+        for nom, info in notes_dispo.items():
+            msg += f"📚 *{nom}*\n"
+            msg += f"      Note: *{info['n']}* │ Coef: {info['c']}\n\n"
+    else:
+        msg += "🚫 _Aucune note pour l'instant._\n\n"
 
-        for matiere, value in notes.items():
-            str_val = str(value) if not isinstance(value, dict) else value.get('note', str(value))
-            
-            # Nettoyage et vérification
-            clean_val = str_val.strip().lower()
-            if clean_val in ["-", "", "en attente", "none"]:
-                notes_attente.append(matiere)
-            else:
-                notes_dispo[matiere] = str_val
-
-        # Construction du message
-        msg = "📊 *VOS NOTES*\n"
-        msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-
-        if notes_dispo:
-            for matiere, note in notes_dispo.items():
-                # On essaie d'extraire un coef si le format le permet (sinon on affiche juste la note)
-                # Format supposé simple pour l'instant
-                coef_txt = "" 
-                # Si vous aviez l'info coef dans le JSON, on l'ajouterait ici.
-                # Pour l'instant on garde le format visuel demandé :
-                
-                msg += f"📚 *{matiere}*\n"
-                msg += f"      Note: *{note}*\n\n"
-        else:
-            msg += "🚫 _Aucune note publiée pour le moment._\n\n"
-
+    msg += "━━━━━━━━━━━━━━━━━━━━\n"
+    if notes_attente:
+        msg += f"⏳ *En attente:* {len(notes_attente)} matières\n"
         msg += "━━━━━━━━━━━━━━━━━━━━\n"
         
-        if notes_attente:
-            msg += f"⏳ *En attente:* {len(notes_attente)} matières\n"
-            msg += "━━━━━━━━━━━━━━━━━━━━\n"
-            
-        total_matieres = len(notes)
-        nb_notes = len(notes_dispo)
-        msg += f"📈 *{nb_notes}/{total_matieres}* notes disponibles"
+    msg += f"📈 *{len(notes_dispo)}/{len(notes)}* notes disponibles"
 
-        await update.message.reply_text(msg, parse_mode="Markdown")
-        
-    except Exception as e:
-        await update.message.reply_text(f"❌ Erreur lecture : {e}")
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 async def run_scraping():
     """Fonction principale de scraping (utilitaire)"""

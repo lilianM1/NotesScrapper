@@ -1,179 +1,142 @@
 import os
 import json
+import re
 import requests
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright
 
-# --- CONFIGURATION (GitHub Secrets) ---
+# --- CONFIGURATION ---
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 USERNAME = os.getenv("INSA_USER")
 PASSWORD = os.getenv("INSA_PWD")
-
 CACHE_FILE = "notes.json"
 
-# --- TELEGRAM ---
 def envoyer_telegram(message):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
+    if not TOKEN or not CHAT_ID: return
     try:
-        requests.post(url, json=payload, timeout=10)
-    except Exception as e:
-        print(f"Erreur Telegram : {e}")
+        requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", 
+                      json={"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"}, timeout=10)
+    except: pass
 
-# --- COMPARAISON DES NOTES ---
 def comparer_et_notifier(notes_nouvelles):
     notes_anciennes = {}
     try:
-        if os.path.exists(CACHE_FILE):
-            # Essayer plusieurs encodages au cas où le fichier existant a un mauvais encodage
-            for encoding in ["utf-8", "latin-1", "cp1252"]:
-                try:
-                    with open(CACHE_FILE, "r", encoding=encoding) as f:
-                        notes_anciennes = json.load(f)
-                    break
-                except (UnicodeDecodeError, json.JSONDecodeError):
-                    continue
-    except Exception:
-        notes_anciennes = {}
+        with open(CACHE_FILE, "r", encoding="utf-8") as f:
+            notes_anciennes = json.load(f)
+    except: pass
 
     changements = []
+    
+    # On compare
+    for matiere, data_new in notes_nouvelles.items():
+        note_new = data_new["note"]
+        coef_new = data_new["coef"]
+        
+        # Récup ancienne donnée
+        data_old = notes_anciennes.get(matiere)
+        note_old = data_old.get("note", "-") if isinstance(data_old, dict) else str(data_old or "-")
 
-    for matiere, note in notes_nouvelles.items():
-        ancienne = notes_anciennes.get(matiere)
-
-        if ancienne is None and note != "-":
-            changements.append(f"📚 *{matiere}*\n➡️ Nouvelle note : *{note}*")
-        elif ancienne != note and note != "-":
-            changements.append(
-                f"📚 *{matiere}*\n"
-                f"Ancienne : `{ancienne}`\n"
-                f"Nouvelle : *{note}*"
-            )
+        # Détection changement
+        if (note_old in ["-", "None", ""]) and (note_new not in ["-", "None", ""]):
+            changements.append(f"🎉 *{matiere}*\n➡️ Note : *{note_new}* (Coef {coef_new})\n")
+        elif note_old != note_new and note_new not in ["-", "None", ""]:
+            changements.append(f"📝 *{matiere}*\nAncienne: `{note_old}`\nNouvelle: *{note_new}*")
 
     if changements:
-        envoyer_telegram(
-            "🔔 *MISE À JOUR DES NOTES INSA*\n\n" +
-            "\n\n".join(changements)
-        )
-        print(f"{len(changements)} changement(s) détecté(s).")
-    else:
-        print("RAS : aucune nouvelle note.")
+        envoyer_telegram("🔔 *NOUVELLES NOTES !*\n\n" + "\n".join(changements))
 
+    # Sauvegarde
     with open(CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(notes_nouvelles, f, indent=4, ensure_ascii=False)
 
-# --- SCRIPT PRINCIPAL ---
 def executer():
     if not USERNAME or not PASSWORD:
-        print("Erreur : Les identifiants INSA_USER ou INSA_PWD sont vides !")
+        print("❌ ID manquants")
         return
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-        )
-        page = context.new_page()
+        page = browser.new_context().new_page()
 
         try:
-            print("Connexion à l'extranet INSA...")
-            page.goto("https://extranet.insa-strasbourg.fr/", wait_until="domcontentloaded", timeout=60000)
+            print("Connexion...")
+            page.goto("https://extranet.insa-strasbourg.fr/", timeout=60000)
+            
+            # Login
+            if page.locator("#username").is_visible():
+                page.fill("#username", USERNAME)
+                page.fill("#password", PASSWORD)
+                page.click("button[type='submit'], input[type='submit']")
+                page.wait_for_load_state("networkidle")
 
-            # --- LOGIN CAS ---
-            # Vérifier si on est sur la page de login CAS (présence du champ username)
-            try:
-                if page.locator("#username").is_visible(timeout=3000):
-                    print("Authentification CAS...")
-                    page.fill("#username", USERNAME)
-                    page.fill("#password", PASSWORD)
-                    page.click("button[type='submit'], input[type='submit']")
-            except:
-                print("Pas de page CAS détectée, déjà connecté ?")
+            # Accès aux notes (clic sur le bouton semestre)
+            print("Recherche tableau...")
+            bouton = page.locator("input[value*='1er semestre'], input[value*='1er']")
+            if bouton.count() > 0:
+                bouton.first.click()
+                page.wait_for_load_state("networkidle")
             
-            # Attendre que la page soit complètement chargée
-            print("Attente du chargement de l'extranet...")
-            page.wait_for_load_state("networkidle", timeout=30000)
+            # --- SCRAPING INTELLIGENT ---
+            notes_dict = {}
             
-            print(f"✅ Connecté ! URL: {page.url}")
-            page.screenshot(path="debug_after_login.png", full_page=True)
+            # On prend toutes les lignes de tableaux
+            rows = page.locator("tr").all()
+            
+            for row in rows:
+                text_content = row.inner_text()
+                
+                # On cherche le pattern : "Blabla - (Chiffre)" dans une cellule
+                # Et une note (chiffre avec virgule ou lettre ou tiret) dans une autre
+                cells = row.locator("td").all()
+                
+                if len(cells) >= 2:
+                    # Cellule 1 : Contient souvent le nom + coef
+                    raw_name = cells[0].inner_text().strip() # ex: STM-GE-01-Elec - (3)
+                    
+                    # Regex pour choper le coef à la fin "(3)" ou "(1,5)"
+                    match_coef = re.search(r"-\s*\(([\d.,]+)\)$", raw_name)
+                    
+                    if match_coef:
+                        # On a trouvé une ligne de matière !
+                        coef = match_coef.group(1) # Le "3"
+                        
+                        # Note: Elle est souvent dans la dernière cellule de la ligne
+                        raw_note = cells[-1].inner_text().strip()
+                        # Si la dernière cellule est vide ou bizarre, on tente l'avant-dernière
+                        if not raw_note and len(cells) > 2:
+                            raw_note = cells[-2].inner_text().strip()
+                        
+                        # NETTOYAGE NOM : Enlever "STM-GE-01-" et " - (3)"
+                        # 1. On enlève la fin (le coef)
+                        nom_propre = raw_name[:match_coef.start()].strip()
+                        
+                        # 2. On enlève le code au début (tout ce qui est avant le dernier tiret du groupe de code)
+                        # Souvent c'est le 3ème tiret. Ex: UE-GEC-STM-GE-01
+                        # Méthode bourrin mais efficace : on garde ce qu'il y a après le dernier tiret SI y'a des tirets
+                        if "-" in nom_propre:
+                             # Ex: "STM-GE-01-Electronique" -> split -> ["STM", "GE", "01", "Electronique"]
+                             parts = nom_propre.split("-")
+                             # Si le dernier morceau est long (>2 lettres), c'est probablement le nom
+                             if len(parts[-1]) > 2:
+                                 nom_propre = parts[-1].strip()
+                             else:
+                                 # Cas bizarre, on prend tout après le premier tiret
+                                 nom_propre = nom_propre.split("-", 1)[1].strip()
 
-            # --- ACCÈS AUX NOTES DU 1ER SEMESTRE ---
-            print("Clic sur 'Consulter vos notes du 1er semestre'...")
-            
-            # Chercher le bouton exact
-            bouton = page.locator("input[value*='1er semestre']")
-            if not bouton.is_visible(timeout=5000):
-                # Essayer avec un autre sélecteur
-                bouton = page.locator("input[value*='1er']")
-            
-            if bouton.is_visible(timeout=3000):
-                bouton.click()
-                print("Bouton cliqué !")
+                        # Stockage
+                        if nom_propre:
+                            notes_dict[nom_propre] = {"note": raw_note, "coef": coef}
+                            print(f"✅ Trouvé: {nom_propre} | Note: {raw_note} | Coef: {coef}")
+
+            if notes_dict:
+                comparer_et_notifier(notes_dict)
             else:
-                print("❌ Bouton 1er semestre non trouvé")
-                # Lister tous les inputs pour debug
-                inputs = page.locator("input").all()
-                for inp in inputs:
-                    try:
-                        val = inp.get_attribute("value") or ""
-                        print(f"  Input trouvé: '{val}'")
-                    except:
-                        pass
-                page.screenshot(path="debug_no_button.png", full_page=True)
-                envoyer_telegram("❌ Bouton des notes introuvable")
-                return
-
-            # Attendre que la page des notes charge
-            print("Chargement de la page des notes...")
-            page.wait_for_load_state("networkidle", timeout=30000)
-            page.wait_for_selector("table", timeout=30000)
-
-            # --- EXTRACTION DES NOTES ---
-            print("Extraction des notes...")
-            page.screenshot(path="debug_notes_page.png", full_page=True)
-            
-            notes_actuelles = {}
-
-            tables = page.locator("table").all()
-            print(f"Nombre de tableaux trouvés: {len(tables)}")
-            
-            for table in tables:
-                rows = table.locator("tr").all()
-                for row in rows:
-                    cells = row.locator("td").all()
-                    if len(cells) >= 3:
-                        matiere = " ".join(cells[1].inner_text().split())
-                        note = cells[2].inner_text().strip()
-                        if matiere and matiere.lower() not in ["matière", "matiere", ""]:
-                            notes_actuelles[matiere] = note
-                            print(f"  -> {matiere}: {note}")
-
-            if notes_actuelles:
-                print(f"\n✅ {len(notes_actuelles)} notes extraites")
-                comparer_et_notifier(notes_actuelles)
-            else:
-                print("⚠️ Aucune note trouvée dans les tableaux.")
-                envoyer_telegram("⚠️ Aucune note trouvée sur l'extranet.")
-
-        except PlaywrightTimeoutError as e:
-            page.screenshot(path="timeout_error.png", full_page=True)
-            print(f"Timeout Playwright. URL: {page.url}")
-            print(f"Détails: {e}")
-            envoyer_telegram("❌ *Erreur INSA* : délai dépassé (timeout).")
+                print("⚠️ Aucune note trouvée (structure introuvable ?)")
 
         except Exception as e:
-            page.screenshot(path="error.png", full_page=True)
-            print(f"Erreur technique : {e}")
-            print(f"URL: {page.url}")
-            envoyer_telegram(f"❌ *Erreur INSA* : {str(e)[:100]}")
-
+            print(f"❌ Erreur: {e}")
         finally:
             browser.close()
 
-# --- LANCEMENT ---
 if __name__ == "__main__":
     executer()
