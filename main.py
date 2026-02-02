@@ -42,9 +42,12 @@ async def view_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     notes_attente = []
 
     for nom, data in notes.items():
-        # Data est mnt toujours un dict {"note": "15", "coef": "2"} grâce au nouveau scraper
-        note = data.get("note", "-")
-        coef = data.get("coef", "?")
+        if isinstance(data, dict):
+            note = data.get("note", "-")
+            coef = data.get("coef", "?")
+        else:
+            note = str(data)
+            coef = "?"
         
         if note in ["-", "", None]:
             notes_attente.append(nom)
@@ -129,10 +132,10 @@ def main():
     application.add_handler(CommandHandler("stats", stats))
 
     # REMPLACEMENT APSCHEDULER PAR JOBQUEUE DU BOT
-    # check toutes les 1200 secondes (20 minutes)
+    # check toutes les 300 secondes (5 minutes)
     if application.job_queue:
-        application.job_queue.run_repeating(scheduled_job, interval=1200, first=10)
-        print("⏰ Planificateur intégré activé (20min)")
+        application.job_queue.run_repeating(scheduled_job, interval=300, first=10)
+        print("⏰ Planificateur intégré activé (5min)")
 
     # Lancement du bot
     print("✅ Bot prêt à recevoir des commandes.")
