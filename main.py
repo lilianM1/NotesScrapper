@@ -46,16 +46,49 @@ async def view_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("📂 Aucune note en cache.")
             return
 
-        message = "📚 *Notes actuelles (Cache):*\n\n"
-        for matiere, note in notes.items():
-            if isinstance(note, dict):
-                valeur = note.get('note', note.get('moyenne', str(note)))
-            else:
-                valeur = str(note)
-                
-            message += f"• *{matiere}* : `{valeur}`\n"
+        # Séparation des notes disponibles et en attente
+        # On considère qu'une note "-" ou vide ou "en attente" est une matière sans note
+        notes_dispo = {}
+        notes_attente = []
+
+        for matiere, value in notes.items():
+            str_val = str(value) if not isinstance(value, dict) else value.get('note', str(value))
             
-        await update.message.reply_text(message, parse_mode="Markdown")
+            # Nettoyage et vérification
+            clean_val = str_val.strip().lower()
+            if clean_val in ["-", "", "en attente", "none"]:
+                notes_attente.append(matiere)
+            else:
+                notes_dispo[matiere] = str_val
+
+        # Construction du message
+        msg = "📊 *VOS NOTES*\n"
+        msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
+
+        if notes_dispo:
+            for matiere, note in notes_dispo.items():
+                # On essaie d'extraire un coef si le format le permet (sinon on affiche juste la note)
+                # Format supposé simple pour l'instant
+                coef_txt = "" 
+                # Si vous aviez l'info coef dans le JSON, on l'ajouterait ici.
+                # Pour l'instant on garde le format visuel demandé :
+                
+                msg += f"📚 *{matiere}*\n"
+                msg += f"      Note: *{note}*\n\n"
+        else:
+            msg += "🚫 _Aucune note publiée pour le moment._\n\n"
+
+        msg += "━━━━━━━━━━━━━━━━━━━━\n"
+        
+        if notes_attente:
+            msg += f"⏳ *En attente:* {len(notes_attente)} matières\n"
+            msg += "━━━━━━━━━━━━━━━━━━━━\n"
+            
+        total_matieres = len(notes)
+        nb_notes = len(notes_dispo)
+        msg += f"📈 *{nb_notes}/{total_matieres}* notes disponibles"
+
+        await update.message.reply_text(msg, parse_mode="Markdown")
         
     except Exception as e:
         await update.message.reply_text(f"❌ Erreur lecture : {e}")
