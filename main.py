@@ -300,14 +300,7 @@ async def run_scraper():
                             ue_moyenne = moy
                 # Si on a trouvé une UE et des matières
                 if ue_name and matieres:
-                    # Calcul de la moyenne UE si possible
-                    notes_valides = [float(n.replace(",", ".")) for n in matieres.values() if n.replace(",", ".").replace("-", "").replace("A", "").replace("a", "").replace(" ", "").replace("/", "").replace(".", "").isdigit()]
-                    moyenne_calc = None
-                    if notes_valides:
-                        moyenne_calc = sum(notes_valides) / len(notes_valides)
-                        ue_notes[ue_name] = {"matieres": matieres, "moyenne": f"{moyenne_calc:.2f}"}
-                    else:
-                        ue_notes[ue_name] = {"matieres": matieres, "moyenne": ue_moyenne}
+                    ue_notes[ue_name] = {"matieres": matieres, "moyenne": ue_moyenne}
             await browser.close()
 
             new_notes = ue_notes
