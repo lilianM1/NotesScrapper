@@ -313,6 +313,9 @@ async def run_scraper():
             if note and note != "-" and (not old or note != old):
                 changes.append({"matiere": mat, "ancienne": old, "nouvelle": note})
 
+    # Log du contenu extrait
+    logger.info(f"Contenu extrait (new_notes): {json.dumps(new_notes, ensure_ascii=False, indent=2)}")
+
     # Sauvegarder
     if new_notes:
         save_notes(new_notes)
