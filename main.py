@@ -101,9 +101,39 @@ async def force_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_text("🕵️‍♂️ Vérification des notes lancée...")
+
+    # Charger les notes avant scraping
+    notes_avant = {}
+    if os.path.exists("notes.json"):
+        with open("notes.json", "r", encoding="utf-8") as f:
+            notes_avant = json.load(f)
+
     success = await run_scraping()
+
+    # Charger les notes après scraping
+    notes_apres = {}
+    if os.path.exists("notes.json"):
+        with open("notes.json", "r", encoding="utf-8") as f:
+            notes_apres = json.load(f)
+
+    # Détecter les nouvelles notes
+    nouvelles_notes = []
+    for nom, data in notes_apres.items():
+        note_apres = data.get("note") if isinstance(data, dict) else data
+        note_avant = notes_avant.get(nom, {}).get("note") if isinstance(notes_avant.get(nom), dict) else notes_avant.get(nom)
+        if (note_apres not in ["-", "", None]) and (note_avant in ["-", "", None, None] or nom not in notes_avant):
+            nouvelles_notes.append(nom)
+
     if success:
-        await update.message.reply_text("✅ Vérification terminée. Tapez /notes pour voir le résultat.")
+        if nouvelles_notes:
+            msg = "🎉 Nouvelle(s) note(s) détectée(s) :\n"
+            for nom in nouvelles_notes:
+                note = notes_apres[nom].get("note") if isinstance(notes_apres[nom], dict) else notes_apres[nom]
+                coef = notes_apres[nom].get("coef", "?") if isinstance(notes_apres[nom], dict) else "?"
+                msg += f"• *{nom}* : {note} (coef {coef})\n"
+            await update.message.reply_text(msg, parse_mode="Markdown")
+        else:
+            await update.message.reply_text("✅ Vérification terminée. Pas de nouvelle note.")
     else:
         await update.message.reply_text("❌ Erreur lors de la vérification.")
 
