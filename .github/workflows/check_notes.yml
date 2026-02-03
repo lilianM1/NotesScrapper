@@ -60,5 +60,7 @@ jobs:
         if: always()
         with:
           name: debug-screenshots
-          path: "*.png"
+          path: |
+            *.png
+            debug_page.html
           retention-days: 3
