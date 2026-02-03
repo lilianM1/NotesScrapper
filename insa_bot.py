@@ -85,13 +85,13 @@ def executer():
                 page.fill("#username", USERNAME)
                 page.fill("#password", PASSWORD)
                 page.click("button[type='submit'], input[type='submit']")
-                page.wait_for_load_state("networkidle")
+                page.wait_for_timeout(5000)
 
             # Navigation vers le semestre actuel
             bouton = page.locator("input[value*='1er semestre'], input[value*='1er']")
             if bouton.count() > 0:
                 bouton.first.click()
-                page.wait_for_load_state("networkidle")
+                page.wait_for_timeout(5000)
             
             notes_dict = {}
             
@@ -138,3 +138,4 @@ def executer():
 
 if __name__ == "__main__":
     executer()
+
