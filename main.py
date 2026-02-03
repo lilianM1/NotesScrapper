@@ -100,7 +100,7 @@ async def force_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⛔")
         return
 
-    await update.message.reply_text("🕵️‍♂️ Vérification des notes lancée...")
+    await update.message.reply_text("🔎 Vérification des notes lancée...")
 
     # Charger les notes avant scraping
     notes_avant = {}
@@ -144,6 +144,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Status : En ligne 🟢",
         parse_mode="Markdown"
     )
+
+async def ue_moyenne(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Fonction à implémenter si nécessaire
+    await update.message.reply_text("⚙️ Fonction UE Moyenne en cours de développement.")
 
 # --- MAIN ---
 def main():
