@@ -164,6 +164,7 @@ def main():
     application.add_handler(CommandHandler("notes", view_notes))
     application.add_handler(CommandHandler("check", force_check))
     application.add_handler(CommandHandler("stats", stats))
+    application.add_handler(CommandHandler("ue", ue_moyenne))
 
     # REMPLACEMENT APSCHEDULER PAR JOBQUEUE DU BOT
     # check toutes les 300 secondes (5 minutes)
