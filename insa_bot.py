@@ -11,6 +11,10 @@ USERNAME = os.getenv("INSA_USER")
 PASSWORD = os.getenv("INSA_PWD")
 CACHE_FILE = "notes.json"
 
+# --- CONSTANTES DE SCRAPING ---
+MIN_SUBJECT_NAME_LENGTH = 3  # Longueur minimale pour considérer un segment comme un nom de matière valide
+HEADER_MATIERE = "matière"  # En-tête de colonne à ignorer lors du scraping
+
 def envoyer_telegram(message):
     if not TOKEN or not CHAT_ID: return
     try:
@@ -65,13 +69,13 @@ def nettoyer_nom_matiere(raw_name):
     # Puis nettoyer les codes du début (ex: STM-GE-01-)
     if "-" in nom_propre:
         parts = nom_propre.split("-")
-        # Si le dernier morceau est long (>3 caractères), c'est probablement le nom
-        if len(parts[-1]) > 3:
+        # Si le dernier morceau est long (>MIN_SUBJECT_NAME_LENGTH caractères), c'est probablement le nom
+        if len(parts[-1]) > MIN_SUBJECT_NAME_LENGTH:
             nom_propre = parts[-1].strip()
         else:
-            # Sinon, chercher la première partie qui semble être un nom (>3 caractères)
+            # Sinon, chercher la première partie qui semble être un nom (>MIN_SUBJECT_NAME_LENGTH caractères)
             for part in parts:
-                if len(part) > 3:
+                if len(part) > MIN_SUBJECT_NAME_LENGTH:
                     nom_propre = part.strip()
                     break
             else:
@@ -155,7 +159,7 @@ def executer():
                                 nom_propre = nettoyer_nom_matiere(raw_name)
                                 
                                 # Stocker si valide
-                                if nom_propre and coef and nom_propre.lower() != "matière":
+                                if nom_propre and coef and nom_propre.lower() != HEADER_MATIERE:
                                     notes_dict[nom_propre] = {"note": raw_note, "coef": coef}
                                     print(f"✅ Trouvé (table imbriquée): {nom_propre} | Note: {raw_note} | Coef: {coef}")
                             
@@ -217,7 +221,7 @@ def executer():
                     raw_name, coef, note = match
                     nom_propre = nettoyer_nom_matiere(raw_name.strip())
                     
-                    if nom_propre and len(nom_propre) > 3:
+                    if nom_propre and len(nom_propre) > MIN_SUBJECT_NAME_LENGTH:
                         notes_dict[nom_propre] = {"note": note.strip(), "coef": coef}
                         print(f"✅ Trouvé (méthode texte): {nom_propre} | Note: {note} | Coef: {coef}")
 
