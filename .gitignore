@@ -44,6 +44,12 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+test_scraping.py
 
 # Logs
 *.log
+
+# Debug files
+debug_*.png
+debug_*.html
+error_*.png

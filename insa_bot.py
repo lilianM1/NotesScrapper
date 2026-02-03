@@ -53,16 +53,31 @@ def nettoyer_nom_matiere(raw_name):
     """
     Nettoie le nom de la matière en extrayant le nom lisible.
     Ex: "STM-GE-01-Electronique" -> "Electronique"
+    Ex: "Stage-STI1 : stage en ingénierie-GE2" -> "stage en ingénierie"
     """
     nom_propre = raw_name.strip()
+    
+    # Si le nom contient ":", prendre ce qui est après le ":"
+    if ":" in nom_propre:
+        # Ex: "Stage-STI1 : stage en ingénierie-GE2" -> "stage en ingénierie-GE2"
+        nom_propre = nom_propre.split(":", 1)[1].strip()
+    
+    # Puis nettoyer les codes du début (ex: STM-GE-01-)
     if "-" in nom_propre:
         parts = nom_propre.split("-")
-        # Si le dernier morceau est long (>2 caractères), c'est probablement le nom
-        if len(parts[-1]) > 2:
+        # Si le dernier morceau est long (>3 caractères), c'est probablement le nom
+        if len(parts[-1]) > 3:
             nom_propre = parts[-1].strip()
         else:
-            # Sinon on prend tout après le premier tiret
-            nom_propre = nom_propre.split("-", 1)[1].strip()
+            # Sinon, chercher la première partie qui semble être un nom (>3 caractères)
+            for part in parts:
+                if len(part) > 3:
+                    nom_propre = part.strip()
+                    break
+            else:
+                # Dernier recours: prendre tout après le premier tiret
+                nom_propre = nom_propre.split("-", 1)[1].strip() if len(parts) > 1 else nom_propre
+    
     return nom_propre
 
 def executer():
@@ -103,63 +118,98 @@ def executer():
             page.screenshot(path="debug_page.png")
             print("📸 Screenshot sauvegardé: debug_page.png")
             
-            # --- SCRAPING INTELLIGENT ---
+            # --- SCRAPING INTELLIGENT AVEC TABLES IMBRIQUÉES ---
             notes_dict = {}
             
-            # Méthode 1: On prend toutes les lignes de tableaux
-            rows = page.locator("tr").all()
-            print(f"📊 Méthode 1: {len(rows)} lignes <tr> trouvées")
+            # Méthode 1: Parcourir les tables imbriquées (structure UE > sous-tableau)
+            print("📊 Méthode 1: Recherche de tables imbriquées (UE > matières)...")
             
-            for row in rows:
-                cells = row.locator("td").all()
+            # Trouver toutes les lignes principales qui pourraient contenir des UE
+            main_rows = page.locator("table tr").all()
+            
+            for main_row in main_rows:
+                # Chercher les cellules de cette ligne
+                cells = main_row.locator("td").all()
                 
-                if len(cells) >= 2:
-                    raw_name = cells[0].inner_text().strip()
+                # Pour chaque cellule, chercher s'il y a un sous-tableau
+                for cell in cells:
+                    # Chercher les sous-tableaux dans cette cellule
+                    nested_tables = cell.locator("table").all()
                     
-                    # Regex pour choper le coef "(3)" ou "(1,5)" après un tiret
-                    # Accepte un suffixe optionnel comme "(moyenne harmonisée)"
-                    match_coef = re.search(r"-\s*\(([\d.,]+)\)(?:\s*\([^)]*\))?\s*$", raw_name)
-                    
-                    if match_coef:
-                        coef = match_coef.group(1)
-                        raw_note = cells[-1].inner_text().strip()
-                        if not raw_note and len(cells) > 2:
-                            raw_note = cells[-2].inner_text().strip()
+                    for nested_table in nested_tables:
+                        # Dans le sous-tableau, parcourir les lignes
+                        nested_rows = nested_table.locator("tr").all()
                         
-                        # Extrait le nom sans le coef à la fin
-                        nom_sans_coef = raw_name[:match_coef.start()].strip()
-                        nom_propre = nettoyer_nom_matiere(nom_sans_coef)
-
-                        # NETTOYAGE NOM : Enlever "STM-GE-01-" et " - (3)"
-                        # 1. On enlève la fin (le coef)
-                        nom_propre = raw_name[:match_coef.start()].strip()
-                        
-                        # 2. On enlève le code au début (tout ce qui est avant le dernier tiret du groupe de code)
-                        # Souvent c'est le 3ème tiret. Ex: UE-GEC-STM-GE-01
-                        # Méthode bourrin mais efficace : on garde ce qu'il y a après le dernier tiret SI y'a des tirets
-                        if "-" in nom_propre:
-                            # Ex: "STM-GE-01-Electronique" -> split -> ["STM", "GE", "01", "Electronique"]
-                            parts = nom_propre.split("-")
-                            # Si le dernier morceau est long (>2 lettres), c'est probablement le nom
-                            if len(parts[-1]) > 2:
-                                nom_propre = parts[-1].strip()
-                            else:
-                                # Cas bizarre, on prend tout après le premier tiret
-                                nom_propre = nom_propre.split("-", 1)[1].strip()
-
-                        # Stockage
-                        if nom_propre:
-                            notes_dict[nom_propre] = {"note": raw_note, "coef": coef}
-                            print(f"✅ Trouvé: {nom_propre} | Note: {raw_note} | Coef: {coef}")
+                        for nested_row in nested_rows:
+                            nested_cells = nested_row.locator("td").all()
+                            
+                            # On s'attend à: [Matière, Coefficient, Note]
+                            # Ou: [Matière avec coef dans le nom, ..., Note]
+                            if len(nested_cells) >= 3:
+                                # Format: [Matière, Coef, Note]
+                                raw_name = nested_cells[0].inner_text().strip()
+                                coef = nested_cells[1].inner_text().strip()
+                                raw_note = nested_cells[2].inner_text().strip()
+                                
+                                # Nettoyer le nom de la matière
+                                nom_propre = nettoyer_nom_matiere(raw_name)
+                                
+                                # Stocker si valide
+                                if nom_propre and coef and nom_propre.lower() != "matière":
+                                    notes_dict[nom_propre] = {"note": raw_note, "coef": coef}
+                                    print(f"✅ Trouvé (table imbriquée): {nom_propre} | Note: {raw_note} | Coef: {coef}")
+                            
+                            elif len(nested_cells) >= 2:
+                                # Peut-être format: [Matière, Note] avec coef dans le nom
+                                raw_name = nested_cells[0].inner_text().strip()
+                                raw_note = nested_cells[-1].inner_text().strip()
+                                
+                                # Chercher le coef dans le nom
+                                match_coef = re.search(r"-\s*\(([\d.,]+)\)(?:\s*\([^)]*\))?\s*$", raw_name)
+                                
+                                if match_coef:
+                                    coef = match_coef.group(1)
+                                    nom_sans_coef = raw_name[:match_coef.start()].strip()
+                                    nom_propre = nettoyer_nom_matiere(nom_sans_coef)
+                                    
+                                    if nom_propre:
+                                        notes_dict[nom_propre] = {"note": raw_note, "coef": coef}
+                                        print(f"✅ Trouvé (table imbriquée, coef dans nom): {nom_propre} | Note: {raw_note} | Coef: {coef}")
             
-            # Méthode 2: Si aucune note trouvée, chercher dans le texte brut de la page
+            # Méthode 2: Si aucune note trouvée, essayer l'ancienne méthode plate
             if not notes_dict:
-                print("🔍 Méthode 2: Recherche dans le texte brut de la page...")
+                print("🔍 Méthode 2: Recherche avec structure plate (fallback)...")
+                rows = page.locator("tr").all()
+                print(f"📊 {len(rows)} lignes <tr> trouvées")
+                
+                for row in rows:
+                    cells = row.locator("td").all()
+                    
+                    if len(cells) >= 2:
+                        raw_name = cells[0].inner_text().strip()
+                        
+                        # Regex pour choper le coef "(3)" ou "(1,5)" après un tiret
+                        match_coef = re.search(r"-\s*\(([\d.,]+)\)(?:\s*\([^)]*\))?\s*$", raw_name)
+                        
+                        if match_coef:
+                            coef = match_coef.group(1)
+                            raw_note = cells[-1].inner_text().strip()
+                            if not raw_note and len(cells) > 2:
+                                raw_note = cells[-2].inner_text().strip()
+                            
+                            nom_sans_coef = raw_name[:match_coef.start()].strip()
+                            nom_propre = nettoyer_nom_matiere(nom_sans_coef)
+                            
+                            if nom_propre:
+                                notes_dict[nom_propre] = {"note": raw_note, "coef": coef}
+                                print(f"✅ Trouvé (structure plate): {nom_propre} | Note: {raw_note} | Coef: {coef}")
+            
+            # Méthode 3: Si aucune note trouvée, chercher dans le texte brut de la page
+            if not notes_dict:
+                print("🔍 Méthode 3: Recherche dans le texte brut de la page...")
                 page_text = page.content()
                 
                 # Pattern pour trouver: "Nom matière - (coef)" suivi d'une note
-                # Format attendu: "STM-GE-01-Electronique analogique 1 - (3)\t10,5"
-                # Groupe 1: nom matière, Groupe 2: coefficient, Groupe 3: note
                 pattern = r'([A-Z][A-Za-z0-9\-\s:éèêàù&]+)\s*-\s*\(([\d.,]+)\)[^<\d]*?([\d,]+|[A-Z]|-)'
                 matches = re.findall(pattern, page_text)
                 
@@ -169,7 +219,7 @@ def executer():
                     
                     if nom_propre and len(nom_propre) > 3:
                         notes_dict[nom_propre] = {"note": note.strip(), "coef": coef}
-                        print(f"✅ Trouvé (méthode 2): {nom_propre} | Note: {note} | Coef: {coef}")
+                        print(f"✅ Trouvé (méthode texte): {nom_propre} | Note: {note} | Coef: {coef}")
 
             if notes_dict:
                 comparer_et_notifier(notes_dict)
