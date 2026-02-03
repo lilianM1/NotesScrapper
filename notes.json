@@ -1,17 +1,62 @@
 {
-  "STM-GE-01-Electronique analogique 1 - (3)": "10,5",
-  "STM-GE-01-Projet Maquette GES3 - (2)": "17,6",
-  "STG-PHYS-05-Electricité générale - (2)": "10,7",
-  "CT-SHSL-03-Anglais - (2)": "-",
-  "CT-SHSL-03-Enjeux environnementaux - (2)": "15,7",
-  "Fabrication additive 1 - (1,5)": "-",
-  "Pratique des silicones et composites - (1,5)": "12,4",
-  "STG-MATH-05-Analyse 3 - (3)": "-",
-  "STG-MATHINFO-05-Algèbre 3 - (3)": "-",
-  "STG-MATHINFO-05-Informatique 3 : Base de données - (2)": "-",
-  "STG-MATHINFO-05-Electromagnétisme 1 - (2)": "6,3",
-  "STM-SPI-03-Résistance des Matériaux - (1)": "-",
-  "STM-SPI-03-Propriétés et choix des Matériaux - (1)": "-",
-  "STG-PHYS-07-Vibrations & Ondes - (2)": "-",
-  "Stage-STI1 : stage en ingénierie-GE2 - (2)": "A"
+    "Electronique analogique 1": {
+        "note": "10,5",
+        "coef": "3"
+    },
+    "Projet Maquette GES3": {
+        "note": "17,6",
+        "coef": "2"
+    },
+    "Electricité générale": {
+        "note": "10,7",
+        "coef": "2"
+    },
+    "Anglais": {
+        "note": "-",
+        "coef": "2"
+    },
+    "Enjeux environnementaux": {
+        "note": "15,7",
+        "coef": "2"
+    },
+    "Fabrication additive 1": {
+        "note": "14,1",
+        "coef": "1,5"
+    },
+    "Pratique des silicones et composites": {
+        "note": "11,9",
+        "coef": "1,5"
+    },
+    "Analyse 3": {
+        "note": "-",
+        "coef": "3"
+    },
+    "Algèbre 3": {
+        "note": "-",
+        "coef": "3"
+    },
+    "Base de données": {
+        "note": "-",
+        "coef": "2"
+    },
+    "Electromagnétisme 1": {
+        "note": "6,3",
+        "coef": "2"
+    },
+    "Résistance des Matériaux": {
+        "note": "-",
+        "coef": "1"
+    },
+    "Propriétés et choix des Matériaux": {
+        "note": "-",
+        "coef": "1"
+    },
+    "Vibrations & Ondes": {
+        "note": "-",
+        "coef": "2"
+    },
+    "stage en ingénierie": {
+        "note": "A",
+        "coef": "2"
+    }
 }
