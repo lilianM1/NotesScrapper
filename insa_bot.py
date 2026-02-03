@@ -114,14 +114,14 @@ def executer():
                         # Souvent c'est le 3ème tiret. Ex: UE-GEC-STM-GE-01
                         # Méthode bourrin mais efficace : on garde ce qu'il y a après le dernier tiret SI y'a des tirets
                         if "-" in nom_propre:
-                             # Ex: "STM-GE-01-Electronique" -> split -> ["STM", "GE", "01", "Electronique"]
-                             parts = nom_propre.split("-")
-                             # Si le dernier morceau est long (>2 lettres), c'est probablement le nom
-                             if len(parts[-1]) > 2:
-                                 nom_propre = parts[-1].strip()
-                             else:
-                                 # Cas bizarre, on prend tout après le premier tiret
-                                 nom_propre = nom_propre.split("-", 1)[1].strip()
+                            # Ex: "STM-GE-01-Electronique" -> split -> ["STM", "GE", "01", "Electronique"]
+                            parts = nom_propre.split("-")
+                            # Si le dernier morceau est long (>2 lettres), c'est probablement le nom
+                            if len(parts[-1]) > 2:
+                                nom_propre = parts[-1].strip()
+                            else:
+                                # Cas bizarre, on prend tout après le premier tiret
+                                nom_propre = nom_propre.split("-", 1)[1].strip()
 
                         # Stockage
                         if nom_propre:
