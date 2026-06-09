@@ -61,7 +61,7 @@ def executer():
                 page.wait_for_timeout(3000) # Pause pour laisser charger le portail
 
             # Clic sur le bouton du semestre
-            bouton = page.locator("input[value*='1er semestre'], input[value*='1er']")
+            bouton = page.locator("input[value*='2ème semestre'], input[value*='2ème']")
             if bouton.count() > 0:
                 bouton.first.click()
                 page.wait_for_timeout(3000) # Attente indispensable sur petite VM
