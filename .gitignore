@@ -53,3 +53,7 @@ test_scraping.py
 debug_*.png
 debug_*.html
 error_*.png
+
+# Fichiers de configuration sensibles
+.env
+.env.local
