@@ -5,7 +5,14 @@ import json
 from datetime import datetime
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+
+# Charger le fichier .env AVANT TOUT LE RESTE
+from dotenv import load_dotenv
+load_dotenv()
+
+# Maintenant on peut charger insa_bot, car les variables d'environnement existent !
 import insa_bot
+
 
 # --- CONFIGURATION ---
 TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -30,6 +37,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def view_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Sécurité : Vérification de l'utilisateur autorisé
+    if AUTHORIZED_USER_ID and str(update.effective_chat.id) != str(AUTHORIZED_USER_ID):
+        await update.message.reply_text("⛔ Accès refusé.")
+        return
+
     # Charge le fichier JSON propre généré par insa_bot
     if not os.path.exists("notes.json"):
         await update.message.reply_text("📂 Pas encore de notes.")

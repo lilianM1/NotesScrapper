@@ -1,1 +1,50 @@
-{}
+{
+    "GE2": {
+        "note": "-",
+        "coef": "3"
+    },
+    "TIPE": {
+        "note": "-",
+        "coef": "4"
+    },
+    "Automatique 1": {
+        "note": "-",
+        "coef": "4"
+    },
+    "Automatique Séquentielle": {
+        "note": "-",
+        "coef": "3"
+    },
+    "Anglais": {
+        "note": "-",
+        "coef": "2"
+    },
+    "Impression 3D (2)": {
+        "note": "15",
+        "coef": "2"
+    },
+    "Introduction à la programmation Python": {
+        "note": "17",
+        "coef": "1,5"
+    },
+    "Analyse 4": {
+        "note": "-",
+        "coef": "3"
+    },
+    "Analyse Numérique": {
+        "note": "13,6",
+        "coef": "3"
+    },
+    "Probabilités": {
+        "note": "8,1",
+        "coef": "1"
+    },
+    "Electromagnétisme 2": {
+        "note": "-",
+        "coef": "2"
+    },
+    "Transferts thermiques": {
+        "note": "-",
+        "coef": "2"
+    }
+}
